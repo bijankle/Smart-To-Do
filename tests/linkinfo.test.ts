@@ -147,6 +147,62 @@ describe("Pasted media links", () => {
     assert.ok(result?.info["Synopsis"]?.includes("hacker"));
   });
 
+  it("recognizes Spotify links and share text (track/album/artist)", () => {
+    const track = parseMediaLink("https://open.spotify.com/track/6rqhFgbbKwnb9MLmUQDhG6");
+    assert.equal(track?.kind, "spotify");
+    assert.equal(track?.entity, "track");
+    assert.equal(track?.id, "6rqhFgbbKwnb9MLmUQDhG6");
+
+    const album = parseMediaLink("https://open.spotify.com/album/4LH4d3cOWNNsVw41Gqt2kv");
+    assert.equal(album?.entity, "album");
+    const artist = parseMediaLink("https://open.spotify.com/artist/0oSGxfWSnnOXhD2fKuz2Gy");
+    assert.equal(artist?.entity, "artist");
+
+    // Share text with a shortener still bins to music off the word 'Spotify'.
+    const share = parseMediaLink("Bohemian Rhapsody · Queen | Spotify https://spotify.link/abc");
+    assert.equal(share?.kind, "spotify-share");
+    assert.ok(/bohemian rhapsody/i.test(share!.slugTitle ?? ""));
+  });
+
+  it("enriches a Spotify track: oEmbed name → iTunes artist/album/duration", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("oembed")) {
+        return { ok: true, json: async () => ({ title: "Bohemian Rhapsody" }) } as Response;
+      }
+      return { ok: true, json: async () => ({ results: [{
+        wrapperType: "track", kind: "song", trackName: "Bohemian Rhapsody",
+        artistName: "Queen", collectionName: "A Night at the Opera",
+        releaseDate: "1975-10-31T00:00:00Z", primaryGenreName: "Rock",
+        trackTimeMillis: 354_000 }] }) } as Response;
+    }) as unknown as typeof fetch;
+
+    const link = parseMediaLink("https://open.spotify.com/track/6rqhFgbbKwnb9MLmUQDhG6")!;
+    const result = await fetchLinkInfo(link, fakeFetch);
+    assert.equal(result?.title, "Bohemian Rhapsody");
+    assert.equal(result?.info["Artist"], "Queen");
+    assert.equal(result?.info["Album"], "A Night at the Opera");
+    assert.equal(result?.info["Length"], "5:54");
+  });
+
+  it("enriches a Spotify album with artist and track count", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("oembed")) return { ok: true, json: async () => ({ title: "A Night at the Opera" }) } as Response;
+      return { ok: true, json: async () => ({ results: [{
+        wrapperType: "collection", collectionName: "A Night at the Opera",
+        artistName: "Queen", releaseDate: "1975-11-21T00:00:00Z",
+        primaryGenreName: "Rock", trackCount: 12 }] }) } as Response;
+    }) as unknown as typeof fetch;
+
+    const link = parseMediaLink("https://open.spotify.com/album/4LH4d3cOWNNsVw41Gqt2kv")!;
+    const result = await fetchLinkInfo(link, fakeFetch);
+    assert.equal(result?.title, "A Night at the Opera");
+    assert.equal(result?.info["Artist"], "Queen");
+    assert.equal(result?.info["Tracks"], "12");
+    assert.equal(result?.info["Type"], "Album");
+  });
+
   it("fails soft when offline", async () => {
     const failing = (async () => {
       throw new Error("offline");

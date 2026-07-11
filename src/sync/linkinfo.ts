@@ -14,12 +14,14 @@ export interface MediaLink {
    * like "The Matrix (1999) - IMDb https://share.google/..." where the title
    * lives in the text and the URL is a shortener. link: any other URL.
    */
-  kind: "goodreads" | "imdb" | "imdb-share" | "goodreads-share" | "link";
+  kind: "goodreads" | "imdb" | "imdb-share" | "goodreads-share" | "spotify" | "spotify-share" | "link";
   url: string;
   id: string | null;
   /** Title recovered from the URL slug or the share text, when present. */
   slugTitle: string | null;
   year: string | null;
+  /** Spotify entity type, when known from the URL. */
+  entity?: "track" | "album" | "artist";
 }
 
 const URL_PATTERN = /https?:\/\/\S+/gi;
@@ -36,6 +38,17 @@ export function parseMediaLink(text: string): MediaLink | null {
   if (imdb) {
     return { kind: "imdb", url: imdb[0], id: imdb[1]!, slugTitle: null, year: null };
   }
+  const spotify = /https?:\/\/open\.spotify\.com\/(track|album|artist)\/([A-Za-z0-9]+)/i.exec(text);
+  if (spotify) {
+    return {
+      kind: "spotify",
+      url: spotify[0],
+      id: spotify[2]!,
+      slugTitle: null,
+      year: null,
+      entity: spotify[1]!.toLowerCase() as "track" | "album" | "artist",
+    };
+  }
 
   const anyUrl = new RegExp(URL_PATTERN).exec(text);
   const url = anyUrl ? anyUrl[0] : null;
@@ -47,7 +60,8 @@ export function parseMediaLink(text: string): MediaLink | null {
   const haystack = `${textPart} ${url ?? ""}`;
   const isImdb = /\bimdb\b/i.test(haystack);
   const isGoodreads = /\bgoodreads\b/i.test(haystack);
-  if (!isImdb && !isGoodreads) {
+  const isSpotify = /\bspotify\b/i.test(haystack);
+  if (!isImdb && !isGoodreads && !isSpotify) {
     if (!url) return null;
     return { kind: "link", url, id: null, slugTitle: textPart || null, year: null };
   }
@@ -57,19 +71,23 @@ export function parseMediaLink(text: string): MediaLink | null {
   const title =
     textPart
       .replace(/[\s(]*\d{4}[\s)]*/, " ")
-      .replace(/\s*[-–—|:]\s*(imdb|goodreads).*$/i, "")
-      .replace(/\b(imdb|goodreads)\b/gi, "")
-      .replace(/\s*[-–—|:]\s*/g, " ")
+      .replace(/\s*[-–—|:]\s*(imdb|goodreads|spotify).*$/i, "")
+      .replace(/\bsong by\b/i, "")
+      .replace(/\b(imdb|goodreads|spotify)\b/gi, "")
+      .replace(/\s*[-–—|:·]\s*/g, " ")
       .replace(/\s+/g, " ")
       .trim()
-      .replace(/\s+(on|via|at|from|see|check|watch)$/i, "")
-      .replace(/^(on|via|at|from|see|check|watch)\s+/i, "")
+      .replace(/\s+(on|via|at|from|see|check|watch|listen)$/i, "")
+      .replace(/^(on|via|at|from|see|check|watch|listen)\s+/i, "")
       .trim() || null;
 
   if (isImdb) {
     return { kind: "imdb-share", url: url ?? "", id: null, slugTitle: title, year };
   }
-  return { kind: "goodreads-share", url: url ?? "", id: null, slugTitle: title, year: null };
+  if (isGoodreads) {
+    return { kind: "goodreads-share", url: url ?? "", id: null, slugTitle: title, year: null };
+  }
+  return { kind: "spotify-share", url: url ?? "", id: null, slugTitle: title, year: null };
 }
 
 export function titleCase(text: string): string {
@@ -95,7 +113,7 @@ function trimSynopsis(text: string | undefined, max = 260): string | null {
   return (lastStop > max * 0.5 ? cut.slice(0, lastStop + 1) : cut.trimEnd()) + "…";
 }
 
-/** Milliseconds or "N min" → "2h 16m". */
+/** Film length. Milliseconds or "N min" → "2h 16m". */
 function formatDuration(ms?: number, minutesText?: string): string | null {
   let minutes = ms ? Math.round(ms / 60000) : NaN;
   if (!minutes && minutesText) minutes = parseInt(minutesText, 10);
@@ -103,6 +121,15 @@ function formatDuration(ms?: number, minutesText?: string): string | null {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return h ? `${h}h ${m}m` : `${m}m`;
+}
+
+/** Song length → "5:54" (minutes:seconds). */
+function formatTrackLength(ms?: number): string | null {
+  if (!ms || ms < 1000) return null;
+  const total = Math.round(ms / 1000);
+  const m = Math.floor(total / 60);
+  const sec = total % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
 interface GoogleBookVolume {
@@ -258,6 +285,72 @@ async function fetchFilmInfo(link: MediaLink, omdbKey: string | null, fetchFn: t
   return fetchFilmByTitle(title, year, fetchFn);
 }
 
+interface ItunesMusic {
+  wrapperType?: string;
+  kind?: string;
+  trackName?: string;
+  collectionName?: string;
+  artistName?: string;
+  releaseDate?: string;
+  primaryGenreName?: string;
+  trackTimeMillis?: number;
+  trackCount?: number;
+}
+
+/** Spotify oEmbed (keyless) resolves a bare track/album/artist URL to a name. */
+async function nameFromSpotify(url: string, fetchFn: typeof fetch): Promise<string | null> {
+  const endpoint = "https://open.spotify.com/oembed?url=" + encodeURIComponent(url);
+  const response = await fetchFn(endpoint);
+  if (!response.ok) return null;
+  const data = (await response.json()) as { title?: string };
+  return data.title?.trim() || null;
+}
+
+/** Rich music info from the keyless iTunes/Apple Music catalogue. */
+async function fetchMusicInfo(link: MediaLink, fetchFn: typeof fetch): Promise<LinkInfo | null> {
+  let query = link.slugTitle;
+  if (!query && link.url) query = await nameFromSpotify(link.url, fetchFn);
+  if (!query) return null;
+
+  const entity = link.entity ?? "track";
+  const entityParam = entity === "album" ? "album" : entity === "artist" ? "musicArtist" : "song";
+  const url =
+    `https://itunes.apple.com/search?media=music&entity=${entityParam}&limit=12&country=AU&term=` +
+    encodeURIComponent(query);
+  const response = await fetchFn(url);
+  if (!response.ok) return null;
+  const results = ((await response.json()) as { results?: ItunesMusic[] }).results ?? [];
+  const target = normalize(query);
+
+  if (entity === "artist") {
+    const m = results.find((r) => normalize(r.artistName) === target) ?? results[0];
+    if (!m?.artistName) return null;
+    const info: Record<string, string> = { Type: "Artist" };
+    if (m.primaryGenreName) info["Genre"] = m.primaryGenreName;
+    return { title: m.artistName, info };
+  }
+  if (entity === "album") {
+    const m = results.find((r) => normalize(r.collectionName) === target) ?? results[0];
+    if (!m?.collectionName) return null;
+    const info: Record<string, string> = { Type: "Album" };
+    if (m.artistName) info["Artist"] = m.artistName;
+    if (m.releaseDate) info["Released"] = m.releaseDate.slice(0, 4);
+    if (m.trackCount) info["Tracks"] = String(m.trackCount);
+    if (m.primaryGenreName) info["Genre"] = m.primaryGenreName;
+    return { title: m.collectionName, info };
+  }
+  const m = results.find((r) => normalize(r.trackName) === target) ?? results[0];
+  if (!m?.trackName) return null;
+  const info: Record<string, string> = { Type: "Song" };
+  if (m.artistName) info["Artist"] = m.artistName;
+  if (m.collectionName) info["Album"] = m.collectionName;
+  if (m.releaseDate) info["Released"] = m.releaseDate.slice(0, 4);
+  const length = formatTrackLength(m.trackTimeMillis);
+  if (length) info["Length"] = length;
+  if (m.primaryGenreName) info["Genre"] = m.primaryGenreName;
+  return { title: m.trackName, info };
+}
+
 export async function fetchLinkInfo(
   link: MediaLink,
   fetchFn: typeof fetch = fetch,
@@ -271,6 +364,9 @@ export async function fetchLinkInfo(
       case "imdb":
       case "imdb-share":
         return await fetchFilmInfo(link, omdbKey, fetchFn);
+      case "spotify":
+      case "spotify-share":
+        return await fetchMusicInfo(link, fetchFn);
       default:
         return null;
     }

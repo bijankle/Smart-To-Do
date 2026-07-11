@@ -88,10 +88,10 @@ const undoStack: CaptureEntry[] = [];
 const redoStack: CaptureEntry[] = [];
 
 function submitCapture(raw: string): void {
-  // Pasted Goodreads/IMDb links (or share-sheet text) become enriched tasks.
+  // Pasted Goodreads/IMDb/Spotify links (or share-sheet text) → enriched tasks.
   const media = parseMediaLink(raw);
   if (media && media.kind !== "link") {
-    const conceptName = media.kind.startsWith("goodreads") ? "books" : "films";
+    const conceptName = mediaConcept(media);
     const buckets = repo.bucketsForConceptName(conceptName);
     // URL slugs are lowercase (title-case them); share text keeps its casing.
     const placeholder = media.slugTitle
@@ -100,7 +100,9 @@ function submitCapture(raw: string): void {
         : media.slugTitle
       : conceptName === "books"
         ? "Goodreads book"
-        : "IMDb film";
+        : conceptName === "films"
+          ? "IMDb film"
+          : "Spotify link";
     const task = repo.addLinkedTask(placeholder, buckets, media.url, {});
     undoStack.push({ text: raw, taskId: task.id });
     render();
@@ -140,12 +142,18 @@ function submitCapture(raw: string): void {
  * title still contains an IMDb/Goodreads share becomes a proper linked task
  * (clean title, right bucket, callout), then enriches. One-shot per task.
  */
+function mediaConcept(media: MediaLink): "books" | "films" | "music" {
+  if (media.kind.startsWith("goodreads")) return "books";
+  if (media.kind.startsWith("spotify")) return "music";
+  return "films";
+}
+
 function healPlainMediaTasks(): void {
   for (const task of repo.listTasks("all")) {
     if (task.link) continue;
     const media = parseMediaLink(task.title);
     if (!media || media.kind === "link") continue;
-    const conceptName = media.kind.startsWith("goodreads") ? "books" : "films";
+    const conceptName = mediaConcept(media);
     const buckets = repo.bucketsForConceptName(conceptName);
     const title =
       media.slugTitle && media.kind === "goodreads"
@@ -573,7 +581,11 @@ function buildCallout(task: TaskRecord): HTMLElement {
     anchor.href = task.link;
     anchor.target = "_blank";
     anchor.rel = "noopener";
-    anchor.textContent = task.link.includes("goodreads") ? "Open on Goodreads ↗" : "Open on IMDb ↗";
+    anchor.textContent = task.link.includes("goodreads")
+      ? "Open on Goodreads ↗"
+      : task.link.includes("spotify")
+        ? "Open in Spotify ↗"
+        : "Open on IMDb ↗";
     actions.append(anchor);
   }
   const edit = document.createElement("button");
