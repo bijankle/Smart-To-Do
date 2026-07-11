@@ -42,6 +42,21 @@
         <button type="button" id="disconnect-btn" class="btn-ghost" hidden>Disconnect</button>
         <span id="sync-status" class="sync-status"></span>
       </div>
+
+      <div class="settings-title" style="margin-top:22px;">Film ratings (optional)</div>
+      <p class="settings-hint">
+        Film callouts already show synopsis, runtime and genre with no setup. To also
+        show the IMDb star rating out of 10, paste a free OMDb API key
+        (omdbapi.com — takes 30 seconds).
+      </p>
+      <label class="settings-label">
+        <span>OMDb API key</span>
+        <input id="omdb-key" class="settings-input" type="text" placeholder="e.g. 1a2b3c4d" />
+      </label>
+      <div class="settings-row">
+        <button type="button" id="omdb-save-btn" class="btn-ghost">Save key</button>
+        <span id="omdb-status" class="sync-status"></span>
+      </div>
     </section>
 
     <form id="capture" class="capture" autocomplete="off">

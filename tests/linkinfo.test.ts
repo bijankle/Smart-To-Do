@@ -21,17 +21,21 @@ describe("Pasted media links", () => {
     assert.equal(titleCase("project hail mary"), "Project Hail Mary");
   });
 
-  it("enriches a Goodreads link from Open Library", async () => {
+  it("enriches a Goodreads link from Google Books (synopsis, pages, rating)", async () => {
     const fakeFetch = (async () => ({
       ok: true,
       json: async () => ({
-        docs: [
+        items: [
           {
-            title: "Project Hail Mary",
-            author_name: ["Andy Weir"],
-            first_publish_year: 2021,
-            number_of_pages_median: 476,
-            ratings_average: 4.5,
+            volumeInfo: {
+              title: "Project Hail Mary",
+              authors: ["Andy Weir"],
+              publishedDate: "2021-05-04",
+              pageCount: 476,
+              averageRating: 4.5,
+              categories: ["Fiction / Science Fiction"],
+              description: "Ryland Grace is the sole survivor on a desperate mission. If he fails, humanity and Earth itself will perish. Except he can't remember why he's there.",
+            },
           },
         ],
       }),
@@ -42,31 +46,50 @@ describe("Pasted media links", () => {
     assert.equal(result?.title, "Project Hail Mary");
     assert.equal(result?.info["Author"], "Andy Weir");
     assert.equal(result?.info["Published"], "2021");
+    assert.equal(result?.info["Pages"], "476");
     assert.equal(result?.info["Rating"], "4.5 / 5");
+    assert.ok(result?.info["Synopsis"]?.includes("Ryland Grace"));
   });
 
-  it("enriches an IMDb link from Wikidata", async () => {
-    const fakeFetch = (async () => ({
-      ok: true,
-      json: async () => ({
-        results: {
-          bindings: [
-            {
-              filmLabel: { value: "Oppenheimer" },
-              directorLabel: { value: "Christopher Nolan" },
-              date: { value: "2023-07-21T00:00:00Z" },
-              genreLabel: { value: "biographical film" },
-            },
-          ],
-        },
-      }),
-    })) as unknown as typeof fetch;
+  it("enriches a bare IMDb link: Wikidata title → iTunes synopsis/duration", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("wikidata")) {
+        return { ok: true, json: async () => ({
+          results: { bindings: [{ filmLabel: { value: "Oppenheimer" }, date: { value: "2023-07-21T00:00:00Z" } }] },
+        }) } as Response;
+      }
+      return { ok: true, json: async () => ({ results: [{
+        kind: "feature-movie", trackName: "Oppenheimer", artistName: "Christopher Nolan",
+        releaseDate: "2023-07-21T00:00:00Z", primaryGenreName: "Drama",
+        trackTimeMillis: 10_800_000, longDescription: "The story of J. Robert Oppenheimer and the atomic bomb.",
+        contentAdvisoryRating: "MA15+" }] }) } as Response;
+    }) as unknown as typeof fetch;
 
     const link = parseMediaLink("https://www.imdb.com/title/tt15398776/")!;
     const result = await fetchLinkInfo(link, fakeFetch);
     assert.equal(result?.title, "Oppenheimer");
     assert.equal(result?.info["Director"], "Christopher Nolan");
     assert.equal(result?.info["Year"], "2023");
+    assert.equal(result?.info["Duration"], "3h 0m");
+    assert.ok(result?.info["Synopsis"]?.includes("Oppenheimer"));
+  });
+
+  it("uses OMDb for the IMDb rating /10 when a key is supplied", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      assert.ok(String(input).includes("omdbapi.com"));
+      return { ok: true, json: async () => ({
+        Response: "True", Title: "The Matrix", Year: "1999", Runtime: "136 min",
+        Genre: "Action, Sci-Fi", Director: "The Wachowskis",
+        Plot: "A hacker learns reality is a simulation.", imdbRating: "8.7",
+      }) } as Response;
+    }) as unknown as typeof fetch;
+
+    const link = parseMediaLink("The Matrix (1999) - IMDb https://share.google/x")!;
+    const result = await fetchLinkInfo(link, fakeFetch, "testkey");
+    assert.equal(result?.info["Rating"], "8.7 / 10");
+    assert.equal(result?.info["Duration"], "2h 16m");
+    assert.ok(result?.info["Synopsis"]?.includes("hacker"));
   });
 
   it("parses share-sheet text with shortener links (the Google-app share format)", () => {
@@ -109,7 +132,7 @@ describe("Pasted media links", () => {
       ok: true,
       json: async () => ({
         results: [
-          { kind: "feature-movie", trackName: "The Matrix", artistName: "Lana Wachowski & Lilly Wachowski", releaseDate: "1999-03-31T00:00:00Z", primaryGenreName: "Sci-Fi & Fantasy" },
+          { kind: "feature-movie", trackName: "The Matrix", artistName: "Lana Wachowski & Lilly Wachowski", releaseDate: "1999-03-31T00:00:00Z", primaryGenreName: "Sci-Fi & Fantasy", trackTimeMillis: 8_160_000, longDescription: "A computer hacker learns the true nature of reality." },
           { kind: "feature-movie", trackName: "The Matrix Reloaded", releaseDate: "2003-05-15T00:00:00Z" },
         ],
       }),
@@ -120,6 +143,8 @@ describe("Pasted media links", () => {
     assert.equal(result?.title, "The Matrix");
     assert.equal(result?.info["Year"], "1999");
     assert.equal(result?.info["Genre"], "Sci-Fi & Fantasy");
+    assert.equal(result?.info["Duration"], "2h 16m");
+    assert.ok(result?.info["Synopsis"]?.includes("hacker"));
   });
 
   it("fails soft when offline", async () => {

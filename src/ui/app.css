@@ -562,6 +562,13 @@ body {
   margin-bottom: 6px;
 }
 
+.callout-synopsis {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--gray-800);
+  margin-bottom: 10px;
+}
+
 .callout-line {
   display: flex;
   gap: 10px;

@@ -68,6 +68,7 @@ const GENERIC_REMAP: Record<string, string> = {
 
 const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
+const OMDB_KEY = "smart-to-do/omdb-key";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -156,7 +157,7 @@ function healPlainMediaTasks(): void {
 }
 
 async function enrichLinkedTask(taskId: string, media: MediaLink): Promise<void> {
-  const result = await fetchLinkInfo(media);
+  const result = await fetchLinkInfo(media, fetch, localStorage.getItem(OMDB_KEY));
   if (!result) return;
   try {
     repo.attachInfo(taskId, { title: result.title, info: result.info });
@@ -542,7 +543,17 @@ function buildCallout(task: TaskRecord): HTMLElement {
   heading.textContent = task.title;
   callout.append(heading);
 
-  for (const [key, value] of Object.entries(task.info ?? {})) {
+  // Synopsis spans full width; the rest are label/value rows.
+  const entries = Object.entries(task.info ?? {});
+  const synopsis = entries.find(([k]) => k === "Synopsis");
+  if (synopsis) {
+    const para = document.createElement("div");
+    para.className = "callout-synopsis";
+    para.textContent = synopsis[1];
+    callout.append(para);
+  }
+  for (const [key, value] of entries) {
+    if (key === "Synopsis") continue;
     const line = document.createElement("div");
     line.className = "callout-line";
     const label = document.createElement("span");
@@ -698,6 +709,19 @@ function initSyncControls(): void {
   });
 
   $("#sync-btn").addEventListener("click", () => void doSync(true));
+
+  // Optional OMDb key for the IMDb /10 rating in film callouts.
+  const omdbInput = $<HTMLInputElement>("#omdb-key");
+  omdbInput.value = localStorage.getItem(OMDB_KEY) ?? "";
+  $("#omdb-save-btn").addEventListener("click", () => {
+    const key = omdbInput.value.trim();
+    if (key) localStorage.setItem(OMDB_KEY, key);
+    else localStorage.removeItem(OMDB_KEY);
+    const status = $("#omdb-status");
+    status.textContent = key ? "Saved ✓ — new film links will show ratings" : "Cleared";
+    status.classList.remove("sync-status-error");
+  });
+
   renderSyncUi();
 }
 
