@@ -15,7 +15,7 @@
  * always agree with tokenized capture text.
  */
 
-import { stem } from "./tokenize.js";
+import { correctToken, stem } from "./tokenize.js";
 
 export interface Concept {
   /** Canonical bucket name used when auto-creating. */
@@ -38,7 +38,7 @@ interface RawConcept {
  * Warehouse — the engine multi-tags whenever several concepts match.
  */
 const PERSONAL_CARE =
-  "condom lube lubricant bandaid bandage plaster gauze panadol paracetamol nurofen ibuprofen aspirin antiseptic dettol savlon tampon liner sanitary deodorant antiperspirant shampoo conditioner bodywash soap toothpaste toothbrush floss mouthwash listerine razor shave shaving gillette schick sunscreen aloe moisturiser moisturizer lotion balm vaseline tissue cotton swab wipe nappy nappies huggies babylove formula colgate sensodyne nivea dove rexona lynx berocca oil vitamin";
+  "condom lube lubricant bandaid bandage plaster gauze panadol paracetamol nurofen ibuprofen aspirin antiseptic dettol savlon tampon liner sanitary deodorant antiperspirant shampoo conditioner bodywash soap toothpaste toothbrush floss mouthwash listerine razor shave shaving gillette schick sunscreen aloe moisturiser moisturizer lotion balm vaseline tissue cotton swab wipe nappy nappies huggies babylove formula colgate sensodyne nivea dove rexona lynx berocca oil vitamin tweezer clipper emery loofah pumice qtip earplug";
 
 const RAW: RawConcept[] = [
   {
@@ -50,7 +50,7 @@ const RAW: RawConcept[] = [
       // Brands and packaged goods people actually write on lists:
       `milo vegemite weetbix nutella tam arnott arnotts cadbury nescafe moccona bega helga tiptop sanitarium kellogg kelloggs masterfoods heinz leggo dolmio praise barilla coke cola pepsi sprite fanta schweppes lipton twinings dilmah doritos smith smiths pringles allens yoplait chobani vaalia ` +
       // Supermarket cleaning/household aisle:
-      `omo dynamo fairy finish ajax windex chux glad gladwrap wrap foil alfoil baking sponge detergent dishwashing bleach napisan ${PERSONAL_CARE}`,
+      `omo dynamo fairy finish ajax windex chux glad gladwrap wrap foil alfoil baking sponge detergent dishwashing bleach napisan toilet paper kleenex sorbent quilton serviette napkin cake salsa ${PERSONAL_CARE}`,
   },
   {
     name: "hardware",
@@ -80,7 +80,7 @@ const RAW: RawConcept[] = [
     name: "homewares",
     aliases: "homewares kmart target bigw",
     vocabulary:
-      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle lego doll craft wrapping ribbon balloon party hamper mat doormat clock sistema pyrex corelle tefal raco tupperware tontine",
+      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle lego doll craft wrapping ribbon balloon party hamper mat doormat clock sistema pyrex corelle tefal raco tupperware tontine rag cloth",
   },
   {
     name: "clothing",
@@ -186,8 +186,19 @@ export function conceptForBucketName(name: string): Concept | null {
  *    both, while "watch the onion movie trailer" (1 recognized word of 4)
  *    stays untagged.
  */
+let unionVocab: Set<string> | null = null;
+function fullVocabulary(): Set<string> {
+  if (!unionVocab) {
+    unionVocab = new Set<string>();
+    for (const concept of CONCEPTS) for (const word of concept.vocabulary) unionVocab.add(word);
+  }
+  return unionVocab;
+}
+
 export function matchConcepts(tokens: string[]): Concept[] {
-  const unique = new Set(tokens);
+  // Typo failsafe: unknown tokens snap to the nearest vocabulary word.
+  const vocab = fullVocabulary();
+  const unique = new Set(tokens.map((t) => correctToken(t, vocab) ?? t));
   if (unique.size === 0) return [];
 
   const recognized = new Set<string>();

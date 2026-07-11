@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { conceptForBucketName, matchConcepts } from "../src/engine/lexicon.js";
-import { tokenize } from "../src/engine/tokenize.js";
+import { correctToken, editDistance, tokenize } from "../src/engine/tokenize.js";
 import { Repository } from "../src/storage/repo.js";
 import { MemoryPersistence } from "../src/storage/persistence.js";
 
@@ -132,6 +132,39 @@ describe("Seed lexicon", () => {
   });
 });
 
+describe("Typo failsafe", () => {
+  it("editDistance handles substitutions, indels, and transpositions", () => {
+    assert.equal(editDistance("onion", "onion", 2), 0);
+    assert.equal(editDistance("onoin", "onion", 2), 1); // transposition
+    assert.equal(editDistance("onien", "onion", 2), 1); // substitution
+    assert.equal(editDistance("onon", "onion", 2), 1); // deletion
+    assert.equal(editDistance("zzz", "onion", 1), 2); // early exit at max+1
+  });
+
+  it("correctToken fixes digit stand-ins and near-misses, but not short words", () => {
+    const vocab = new Set(["tweezer", "toilet", "onion", "balm"]);
+    assert.equal(correctToken("tw33zer", vocab), "tweezer");
+    assert.equal(correctToken("t9ilet", vocab), "toilet");
+    assert.equal(correctToken("onoin", vocab), "onion");
+    assert.equal(correctToken("ball", vocab), null); // 4 letters: exact only
+    assert.equal(correctToken("qqqqqq", vocab), null);
+  });
+
+  it("captures with typos still file correctly", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.createBucket("Coles");
+    repo.createBucket("Chemist Warehouse");
+    assert.deepEqual([...repo.addTask("tw33zer").buckets].sort(), ["Chemist Warehouse", "Coles"]);
+    assert.deepEqual([...repo.addTask("tweezers for balls").buckets].sort(), [
+      "Chemist Warehouse",
+      "Coles",
+    ]);
+    // "t9ilet paper": both words resolve, and the strong groceries pair
+    // (toilet + paper) suppresses the stationery reading of "paper".
+    assert.deepEqual(repo.addTask("t9ilet paper").buckets, ["Coles"]);
+  });
+});
+
 describe("Repository — multi-bucket tagging", () => {
   it("tags a mixed capture into multiple buckets as ONE task", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
@@ -154,16 +187,18 @@ describe("Repository — multi-bucket tagging", () => {
     assert.deepEqual([...mixed.buckets].sort(), ["Bunnings", "JB Hi-Fi"]);
   });
 
-  it("files medical phrasing into a medical bucket", async () => {
+  it("files medical phrasing into a medical bucket, typos included", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("medical");
     assert.deepEqual(repo.addTask("get a medical assessment").buckets, ["medical"]);
+    // The fuzzy layer resolves these at capture time now.
+    assert.deepEqual(repo.addTask("get a medcical asessment").buckets, ["medical"]);
   });
 
-  it("renaming an untagged task re-runs auto-tagging (typo fix)", async () => {
+  it("renaming an untagged task re-runs auto-tagging (garbled beyond repair)", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("medical");
-    const task = repo.addTask("get a medcical asessment"); // typos → untagged
+    const task = repo.addTask("get a mzdxcal asmt"); // too mangled even for fuzzy
     assert.deepEqual(task.buckets, []);
     repo.renameTask(task.id, "get a medical assessment");
     assert.deepEqual(repo.getTask(task.id)!.buckets, ["medical"]);
