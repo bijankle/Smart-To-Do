@@ -137,17 +137,26 @@ export interface ConceptMatch {
 }
 
 /**
- * Best concept for already-tokenized capture text. Requires at least two
- * distinct vocabulary hits — one everyday word is coincidence, two is a
- * category — which keeps auto-creation conservative.
+ * Best concept for already-tokenized capture text.
+ *
+ * Two distinct vocabulary hits always match ("celery and onions"). A single
+ * hit matches only when it is decisive: no other concept recognizes anything,
+ * and the recognized word makes up at least half of the informative text —
+ * so a bare "laptop" files into electronics, while "watch the onion movie
+ * trailer" (one grocery word out of four) stays in the Inbox.
  */
 export function matchConcept(tokens: string[]): ConceptMatch | null {
   const unique = new Set(tokens);
-  let best: ConceptMatch | null = null;
+  const scored: ConceptMatch[] = [];
   for (const concept of CONCEPTS) {
     let hits = 0;
     for (const word of concept.vocabulary) if (unique.has(word)) hits += 1;
-    if (hits >= 2 && (best === null || hits > best.hits)) best = { concept, hits };
+    if (hits > 0) scored.push({ concept, hits });
   }
-  return best;
+  if (scored.length === 0) return null;
+  scored.sort((a, b) => b.hits - a.hits);
+  const best = scored[0]!;
+  if (best.hits >= 2) return best;
+  if (scored.length === 1 && best.hits * 2 >= unique.size) return best;
+  return null;
 }

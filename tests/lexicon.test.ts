@@ -33,8 +33,10 @@ describe("Seed lexicon", () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("electronics");
     repo.createBucket("computer");
-    assert.equal(repo.addTask("hdmi cable and a phone charger").bucket, "electronics");
-    assert.equal(repo.addTask("backup the photo folder and update drivers").bucket, "computer");
+    repo.addTask("hdmi cable and a phone charger"); // list → split into children
+    assert.deepEqual(repo.listTasks("electronics").map((t) => t.title), ["hdmi cable", "phone charger"]);
+    repo.addTask("backup the photo folder and update drivers");
+    assert.deepEqual(repo.listTasks("computer").map((t) => t.title), ["backup photo folder", "update drivers"]);
   });
 
   it("matches text to a concept only with 2+ distinct vocabulary hits", () => {
@@ -46,14 +48,56 @@ describe("Seed lexicon", () => {
 });
 
 describe("Repository — seeded buckets classify with zero training", () => {
-  it("files grocery words into an existing untrained groceries bucket", async () => {
+  it("splits list captures into per-item children in the bucket, parent stays in All", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("groceries");
     repo.createBucket("hardware");
-    const task = repo.addTask("i need celery and onions");
-    assert.equal(task.bucket, "groceries");
-    const hardwareTask = repo.addTask("hammer and nails for the fence");
-    assert.equal(hardwareTask.bucket, "hardware");
+
+    const parent = repo.addTask("i need celery and onions");
+    assert.equal(parent.bucket, null);
+    assert.equal(parent.childIds?.length, 2);
+    assert.deepEqual(repo.listTasks("groceries").map((t) => t.title), ["celery", "onions"]);
+    // Parent is categorized-by-proxy: visible in All, NOT in the Inbox pill.
+    assert.ok(repo.listTasks("all").some((t) => t.id === parent.id));
+    assert.equal(repo.listTasks("inbox").length, 0);
+
+    repo.addTask("hammer and nails for the fence");
+    assert.deepEqual(repo.listTasks("hardware").map((t) => t.title), ["hammer", "nails"]);
+  });
+
+  it("completing the parent completes its children (and back)", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.createBucket("groceries");
+    const parent = repo.addTask("i need celery and onions");
+
+    repo.setDone(parent.id, true);
+    assert.equal(repo.listTasks("groceries").length, 0);
+    assert.deepEqual(
+      repo.listCompleted("groceries").map((t) => t.done),
+      [true, true],
+    );
+
+    repo.setDone(parent.id, false);
+    assert.equal(repo.listTasks("groceries").length, 2);
+  });
+
+  it("does not split non-list captures or mixed text", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.createBucket("groceries");
+    // "mac" has no vocabulary hit, so the capture stays whole.
+    const task = repo.addTask("mac and cheese");
+    assert.equal(task.childIds, undefined);
+  });
+
+  it("files a single strong word into its concept bucket ('laptop' → electronics)", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.createBucket("electronics");
+    assert.equal(repo.addTask("laptop").bucket, "electronics");
+
+    // And auto-creates the bucket when it doesn't exist yet.
+    const fresh = await Repository.open(new MemoryPersistence(), makeOptions());
+    assert.equal(fresh.addTask("laptop").bucket, "electronics");
+    assert.ok(fresh.listBuckets().includes("electronics"));
   });
 
   it("user corrections still outweigh the seeds", async () => {
@@ -79,7 +123,7 @@ describe("Repository — seeded buckets classify with zero training", () => {
     await persistence.save(JSON.stringify(doc));
 
     const reopened = await Repository.open(persistence, makeOptions(9_000_000));
-    const task = reopened.addTask("i need celery and onions");
+    const task = reopened.addTask("i need celery");
     assert.equal(task.bucket, "groceries");
   });
 });
@@ -87,9 +131,9 @@ describe("Repository — seeded buckets classify with zero training", () => {
 describe("Repository — reasonable auto-creation", () => {
   it("auto-creates a concept bucket on a clear 2-hit match", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
-    const task = repo.addTask("i need celery and onions");
-    assert.equal(task.bucket, "groceries");
+    repo.addTask("i need celery and onions");
     assert.ok(repo.listBuckets().includes("groceries"));
+    assert.deepEqual(repo.listTasks("groceries").map((t) => t.title), ["celery", "onions"]);
   });
 
   it("does not auto-create on a single everyday word", async () => {
@@ -102,9 +146,9 @@ describe("Repository — reasonable auto-creation", () => {
   it("reuses an alias bucket instead of creating a duplicate concept", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("Food");
-    const task = repo.addTask("i need celery and onions");
-    assert.equal(task.bucket, "Food");
+    repo.addTask("i need celery and onions");
     assert.deepEqual(repo.listBuckets(), ["Food"]);
+    assert.deepEqual(repo.listTasks("Food").map((t) => t.title), ["celery", "onions"]);
   });
 
   it("never resurrects a bucket the user deleted", async () => {

@@ -29,6 +29,13 @@ export interface TaskRecord {
    * knows exactly what to untrain. Null when the task never trained the model.
    */
   trainedBucket: string | null;
+  /**
+   * List captures ("i need celery and onions") split into per-item child
+   * tasks filed in the bucket, while the original text stays as an untagged
+   * parent. Completing the parent completes its children.
+   */
+  childIds?: string[];
+  parentId?: string;
 }
 
 export interface BucketRecord {

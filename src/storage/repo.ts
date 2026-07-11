@@ -13,7 +13,7 @@
 
 import { classify, ensureBucket, seed, train, untrain } from "../engine/classify.js";
 import { conceptForBucketName, matchConcept, type Concept } from "../engine/lexicon.js";
-import { tokenize } from "../engine/tokenize.js";
+import { stem, tokenize } from "../engine/tokenize.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD } from "../engine/parse.js";
 import {
   createDoc,
@@ -107,6 +107,12 @@ export class Repository {
       } else {
         assigned = this.assignByLexicon(trimmed);
       }
+      // List captures split into per-item children filed in the bucket,
+      // with the original text kept as an untagged parent in "All".
+      if (assigned !== null) {
+        const items = this.splitListItems(trimmed, assigned);
+        if (items) return this.addSplitTasks(trimmed, items, assigned, ts);
+      }
     }
 
     const task: TaskRecord = {
@@ -145,7 +151,74 @@ export class Repository {
   }
 
   private matchesFilter(task: TaskRecord, filter: TaskFilter): boolean {
-    return filter === "all" ? true : filter === "inbox" ? task.bucket === null : task.bucket === filter;
+    if (filter === "all") return true;
+    if (filter === "inbox") {
+      // A parent whose items are filed in a bucket is not "untriaged".
+      return task.bucket === null && !(task.childIds && task.childIds.length > 0);
+    }
+    return task.bucket === filter;
+  }
+
+  /**
+   * Split a list-style capture ("i need celery and onions") into one child
+   * title per segment, using the bucket's concept vocabulary. Only splits
+   * when there are 2+ segments and EVERY segment contains a recognized item —
+   * otherwise the capture stays a single task ("mac and cheese" doesn't split).
+   */
+  private splitListItems(title: string, bucket: string): string[] | null {
+    const concept = conceptForBucketName(bucket);
+    if (!concept) return null;
+    const vocab = new Set(concept.vocabulary);
+    const segments = title.split(/,|\band\b|&/i).map((s) => s.trim()).filter(Boolean);
+    if (segments.length < 2) return null;
+
+    const items: string[] = [];
+    for (const segment of segments) {
+      const matched = segment
+        .split(/\s+/)
+        .filter((word) => vocab.has(stem(word.toLowerCase().replace(/[^a-z0-9]/g, ""))));
+      if (matched.length === 0) return null;
+      items.push(matched.join(" "));
+    }
+    return items;
+  }
+
+  private addSplitTasks(fullTitle: string, items: string[], bucket: string, ts: string): TaskRecord {
+    const parent: TaskRecord = {
+      id: this.newId(),
+      title: fullTitle,
+      bucket: null,
+      done: false,
+      completedAt: null,
+      order: this.topOrder(),
+      createdAt: ts,
+      modifiedAt: ts,
+      deletedAt: null,
+      trainedBucket: null,
+      childIds: [],
+    };
+    this.doc.tasks[parent.id] = parent;
+
+    // Insert in reverse so the first item ends up highest in the list.
+    for (const item of [...items].reverse()) {
+      const child: TaskRecord = {
+        id: this.newId(),
+        title: item,
+        bucket,
+        done: false,
+        completedAt: null,
+        order: this.topOrder(),
+        createdAt: ts,
+        modifiedAt: ts,
+        deletedAt: null,
+        trainedBucket: null,
+        parentId: parent.id,
+      };
+      this.doc.tasks[child.id] = child;
+      parent.childIds!.unshift(child.id);
+    }
+    this.scheduleSave();
+    return parent;
   }
 
   getTask(id: string): TaskRecord | null {
@@ -153,11 +226,21 @@ export class Repository {
     return task && task.deletedAt === null ? task : null;
   }
 
+  /** Completing a parent completes its children (and un-completing restores them). */
   setDone(id: string, done: boolean): void {
     const task = this.requireTask(id);
-    task.done = done;
-    task.completedAt = done ? this.now().toISOString() : null;
-    this.touch(task);
+    const ts = this.now().toISOString();
+    const apply = (t: TaskRecord) => {
+      t.done = done;
+      t.completedAt = done ? ts : null;
+      t.modifiedAt = ts;
+    };
+    apply(task);
+    for (const childId of task.childIds ?? []) {
+      const child = this.doc.tasks[childId];
+      if (child && child.deletedAt === null) apply(child);
+    }
+    this.scheduleSave();
   }
 
   renameTask(id: string, title: string): void {

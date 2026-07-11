@@ -186,12 +186,11 @@ function renderRow(task: TaskRecord): HTMLElement {
 
   row.append(check, body, tag);
   if (!task.done) {
-    row.append(
-      iconButton("row-top", "↑", "Move to top", () => {
-        repo.moveToTop(task.id);
-        render();
-      }),
-    );
+    // Manual filing = the training signal. Same picker as the tag chip.
+    const assign = iconButton("row-assign", "+", "Add to a tag — teaches the app", () => {
+      openTagMenu(assign, task);
+    });
+    row.append(assign);
   }
   row.append(
     iconButton("row-delete", "×", "Delete", () => {

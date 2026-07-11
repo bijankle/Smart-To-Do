@@ -117,7 +117,7 @@ describe("Repository — buckets, pills, and learning", () => {
     repo.addTask("email the quarterly report", "Work");
     repo.addTask("review report deck slides", "Work");
 
-    const auto = repo.addTask("buy eggs and bread");
+    const auto = repo.addTask("buy more eggs");
     assert.equal(auto.bucket, "Groceries");
     // Auto-assignment must NOT train the model on its own prediction.
     assert.equal(auto.trainedBucket, null);
