@@ -1,10 +1,10 @@
 /**
- * Offline support: cache-first with background refresh for same-origin GETs.
- * The app shell is precached on install; runtime fetches (compiled JS modules)
- * are cached as they load, so after the first visit the app works offline —
- * important in stores with poor reception. Updates arrive one load behind.
+ * Offline support: NETWORK-FIRST with cache fallback for same-origin GETs.
+ * Online, every launch gets the newest deployed version immediately; the
+ * cache only serves when the network is unavailable or slow (>4s) — i.e. in
+ * a store aisle, which is exactly where offline support matters.
  */
-const CACHE = "smart-to-do-v1";
+const CACHE = "smart-to-do-v2";
 const SHELL = [
   "./",
   "./index.html",
@@ -38,18 +38,18 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE);
-      const cached = await cache.match(event.request);
-      const network = fetch(event.request)
-        .then((response) => {
-          if (response.ok) cache.put(event.request, response.clone());
-          return response;
-        })
-        .catch(() => undefined);
-      if (cached) {
-        network.catch(() => undefined); // refresh in the background
-        return cached;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4000);
+      try {
+        const response = await fetch(event.request, { signal: controller.signal });
+        clearTimeout(timer);
+        if (response.ok) cache.put(event.request, response.clone());
+        return response;
+      } catch {
+        clearTimeout(timer);
+        const cached = await cache.match(event.request);
+        return cached ?? new Response("Offline", { status: 503 });
       }
-      return (await network) ?? new Response("Offline", { status: 503 });
     })(),
   );
 });

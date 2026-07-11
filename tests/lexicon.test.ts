@@ -75,6 +75,14 @@ describe("Seed lexicon", () => {
     ]);
   });
 
+  it("two supermarkets both get grocery items", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.createBucket("Coles");
+    repo.createBucket("Woolworths");
+    const task = repo.addTask("milk and bread");
+    assert.deepEqual([...task.buckets].sort(), ["Coles", "Woolworths"]);
+  });
+
   it("understands brand names ('milo and glad wrap')", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("Coles");

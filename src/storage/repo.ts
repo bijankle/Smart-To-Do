@@ -173,8 +173,9 @@ export class Repository {
   private autoTag(text: string): string[] {
     const lexicon: string[] = [];
     for (const concept of matchConcepts(tokenize(text))) {
-      const existing = this.liveBucketForConcept(concept);
-      if (existing) lexicon.push(existing);
+      // ALL buckets of the concept: someone who shops at both Coles and
+      // Woolworths wants grocery items on both stores' lists.
+      lexicon.push(...this.liveBucketsForConcept(concept));
     }
     // A mixed capture spanning several buckets ("celery and a drill bit")
     // beats the classifier's single-bucket guess, which would otherwise let
@@ -193,11 +194,8 @@ export class Repository {
     return lexicon;
   }
 
-  private liveBucketForConcept(concept: Concept): string | null {
-    for (const name of this.listBuckets()) {
-      if (conceptForBucketName(name) === concept) return name;
-    }
-    return null;
+  private liveBucketsForConcept(concept: Concept): string[] {
+    return this.listBuckets().filter((name) => conceptForBucketName(name) === concept);
   }
 
   /** Live, OPEN tasks for a pill filter, sorted top-first. Completed tasks vanish from here. */
