@@ -111,6 +111,25 @@ describe("Pasted media links", () => {
     assert.equal(await fetchLinkInfo(link, failing), null);
   });
 
+  it("relinkMedia heals a plain task that has a share string in its title", async () => {
+    let tick = 0;
+    const repo = await Repository.open(new MemoryPersistence(), {
+      now: () => new Date(1_000_000 + ++tick * 1000),
+      newId: () => `task-${tick}`,
+    });
+    repo.createBucket("Films");
+    // Simulate a pre-fix junk task.
+    const plain = repo.addTask("The Matrix (1999) - IMDb https://share.google/xyz");
+    assert.equal(plain.link, undefined);
+
+    const media = parseMediaLink(plain.title)!;
+    repo.relinkMedia(plain.id, media.slugTitle!, repo.bucketsForConceptName("films"), media.url);
+    const healed = repo.getTask(plain.id)!;
+    assert.equal(healed.title, "The Matrix");
+    assert.deepEqual(healed.buckets, ["Films"]);
+    assert.equal(healed.link, "https://share.google/xyz");
+  });
+
   it("addLinkedTask + attachInfo persist link, info, and bucket", async () => {
     const persistence = new MemoryPersistence();
     let tick = 0;

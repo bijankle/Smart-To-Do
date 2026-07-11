@@ -312,6 +312,21 @@ export class Repository {
     this.touch(task);
   }
 
+  /**
+   * Convert an existing plain task into a linked media task in place — used
+   * to heal tasks captured before share-text parsing existed (the whole
+   * share string ended up as the title). Sets a clean title, the concept
+   * buckets, and the source link; enrichment then fills the info.
+   */
+  relinkMedia(id: string, title: string, buckets: string[], link: string): void {
+    const task = this.requireTask(id);
+    task.title = title.trim();
+    task.buckets = buckets.filter((b) => this.isLiveBucket(b));
+    task.link = link;
+    task.info = task.info ?? {};
+    this.touch(task);
+  }
+
   /** Live, OPEN tasks for a pill filter, sorted top-first. Completed tasks vanish from here. */
   listTasks(filter: TaskFilter = "all"): TaskRecord[] {
     return Object.values(this.doc.tasks)

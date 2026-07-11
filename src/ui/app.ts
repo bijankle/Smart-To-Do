@@ -134,6 +134,27 @@ function submitCapture(raw: string): void {
   void webCheckUntagged();
 }
 
+/**
+ * Heal tasks captured before share-text parsing existed: a plain task whose
+ * title still contains an IMDb/Goodreads share becomes a proper linked task
+ * (clean title, right bucket, callout), then enriches. One-shot per task.
+ */
+function healPlainMediaTasks(): void {
+  for (const task of repo.listTasks("all")) {
+    if (task.link) continue;
+    const media = parseMediaLink(task.title);
+    if (!media || media.kind === "link") continue;
+    const conceptName = media.kind.startsWith("goodreads") ? "books" : "films";
+    const buckets = repo.bucketsForConceptName(conceptName);
+    const title =
+      media.slugTitle && media.kind === "goodreads"
+        ? titleCase(media.slugTitle)
+        : media.slugTitle ?? task.title;
+    repo.relinkMedia(task.id, title, buckets, media.url);
+    void enrichLinkedTask(task.id, media);
+  }
+}
+
 async function enrichLinkedTask(taskId: string, media: MediaLink): Promise<void> {
   const result = await fetchLinkInfo(media);
   if (!result) return;
@@ -694,6 +715,7 @@ async function main(): Promise<void> {
   repo = await Repository.open(new WebStoragePersistence(window.localStorage));
   repo.applyStoreSetup(MY_PILLS, GENERIC_REMAP);
   repo.retagUntagged();
+  healPlainMediaTasks();
   void webCheckUntagged();
   $("#capture").addEventListener("submit", handleCapture as EventListener);
   window.addEventListener("keydown", handleUndoKeys);
