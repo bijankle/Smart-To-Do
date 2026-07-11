@@ -168,12 +168,16 @@ function reEnrichLinkedTasks(): void {
   if (!navigator.onLine) return;
   for (const task of repo.listTasks("all")) {
     if (!task.link || reEnriched.has(task.id)) continue;
-    if (task.info && Object.keys(task.info).length > 0) continue;
+    const concept = taskMediaConcept(task);
+    const isEmpty = !task.info || Object.keys(task.info).length === 0;
+    // Books and films should carry a synopsis; backfill it if an older
+    // enrichment (or source) produced info without one.
+    const missingSynopsis = (concept === "books" || concept === "films") && !task.info?.["Synopsis"];
+    if (!isEmpty && !missingSynopsis) continue;
     reEnriched.add(task.id);
 
     let media = parseMediaLink(task.link);
     if (!media || media.kind === "link") {
-      const concept = taskMediaConcept(task);
       if (!concept) continue;
       const kind =
         concept === "films" ? "imdb-share" : concept === "books" ? "goodreads-share" : "spotify-share";
