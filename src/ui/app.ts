@@ -35,25 +35,86 @@ const $ = <T extends HTMLElement>(selector: string): T => document.querySelector
 
 const TAG_PATTERN = /(?:^|\s)#([\w-]+)/;
 
+/**
+ * Capture undo/redo (Cmd+Z / Cmd+Y): undoing removes the captured task and
+ * puts the original text back in the input for correction; redo re-captures.
+ */
+interface CaptureEntry {
+  text: string;
+  taskId: string;
+}
+const undoStack: CaptureEntry[] = [];
+const redoStack: CaptureEntry[] = [];
+
+function submitCapture(raw: string): void {
+  const tagMatch = TAG_PATTERN.exec(raw);
+  const title = raw.replace(TAG_PATTERN, " ").replace(/\s+/g, " ").trim();
+  if (!title) return;
+
+  let task;
+  if (tagMatch) {
+    const tag = tagMatch[1]!;
+    if (!repo.listBuckets().includes(tag)) repo.createBucket(tag);
+    task = repo.addTask(title, tag);
+  } else {
+    task = repo.addTask(title);
+  }
+  undoStack.push({ text: raw, taskId: task.id });
+  render();
+}
+
 function handleCapture(event: SubmitEvent): void {
   event.preventDefault();
   const input = $<HTMLInputElement>("#capture-input");
   const raw = input.value.trim();
   if (!raw) return;
-
-  const tagMatch = TAG_PATTERN.exec(raw);
-  const title = raw.replace(TAG_PATTERN, " ").replace(/\s+/g, " ").trim();
-  if (!title) return;
-
-  if (tagMatch) {
-    const tag = tagMatch[1]!;
-    if (!repo.listBuckets().includes(tag)) repo.createBucket(tag);
-    repo.addTask(title, tag);
-  } else {
-    repo.addTask(title);
-  }
+  redoStack.length = 0; // a fresh capture invalidates the redo history
+  submitCapture(raw);
   input.value = "";
+}
+
+function undoCapture(): void {
+  const entry = undoStack.pop();
+  if (!entry) return;
+  try {
+    repo.deleteTask(entry.taskId);
+  } catch {
+    /* already gone (deleted or synced away) — restoring the text still helps */
+  }
+  redoStack.push(entry);
+  const input = $<HTMLInputElement>("#capture-input");
+  input.value = entry.text;
   render();
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+function redoCapture(): void {
+  const entry = redoStack.pop();
+  if (!entry) return;
+  submitCapture(entry.text);
+  $<HTMLInputElement>("#capture-input").value = "";
+}
+
+function handleUndoKeys(event: KeyboardEvent): void {
+  if (!(event.metaKey || event.ctrlKey)) return;
+  // Don't hijack undo while the user is editing a task title or a form field
+  // other than the capture box — let the browser's native text undo work.
+  const active = document.activeElement;
+  if (
+    (active instanceof HTMLInputElement && active.id !== "capture-input") ||
+    active instanceof HTMLTextAreaElement
+  ) {
+    return;
+  }
+  const key = event.key.toLowerCase();
+  if (key === "z" && !event.shiftKey) {
+    event.preventDefault();
+    undoCapture();
+  } else if (key === "y" || (key === "z" && event.shiftKey)) {
+    event.preventDefault();
+    redoCapture();
+  }
 }
 
 // ---- pill bar --------------------------------------------------------------
@@ -93,9 +154,6 @@ function renderPills(): void {
 
   nav.append(
     pill("All", repo.listTasks("all").length, { active: filter === "all" }, () => setFilter("all")),
-    pill("Inbox", repo.listTasks("inbox").length, { active: filter === "inbox" }, () =>
-      setFilter("inbox"),
-    ),
   );
   for (const bucket of repo.listBucketDetails()) {
     nav.append(
@@ -172,19 +230,23 @@ function renderRow(task: TaskRecord): HTMLElement {
   const title = document.createElement("div");
   title.className = "row-title";
   title.textContent = task.title;
+  title.title = "Click to edit";
+  title.addEventListener("click", () => beginTitleEdit(title, task));
   body.append(title);
 
-  const tag = document.createElement("button");
-  tag.type = "button";
-  tag.className = task.bucket ? "row-tag" : "row-tag row-tag-inbox";
-  tag.textContent = task.bucket ?? "inbox";
-  tag.title = "Move to another tag (teaches the classifier)";
-  tag.addEventListener("click", (e) => {
-    e.stopPropagation();
-    openTagMenu(tag, task);
-  });
-
-  row.append(check, body, tag);
+  row.append(check, body);
+  for (const bucket of task.buckets) {
+    const tag = document.createElement("button");
+    tag.type = "button";
+    tag.className = "row-tag";
+    tag.textContent = bucket;
+    tag.title = "Edit this task's tags (teaches the classifier)";
+    tag.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openTagMenu(tag, task);
+    });
+    row.append(tag);
+  }
   if (!task.done) {
     // Manual filing = the training signal. Same picker as the tag chip.
     const assign = iconButton("row-assign", "+", "Add to a tag — teaches the app", () => {
@@ -201,27 +263,60 @@ function renderRow(task: TaskRecord): HTMLElement {
   return row;
 }
 
+/** Click-to-edit: fixing a typo on an untagged task re-runs auto-tagging. */
+function beginTitleEdit(el: HTMLElement, task: TaskRecord): void {
+  const input = document.createElement("input");
+  input.className = "row-edit";
+  input.value = task.title;
+  input.maxLength = 300;
+  el.replaceWith(input);
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+  let settled = false;
+  const finish = (save: boolean) => {
+    if (settled) return;
+    settled = true;
+    const text = input.value.trim();
+    if (save && text && text !== task.title) {
+      try {
+        repo.renameTask(task.id, text);
+      } catch {
+        /* task vanished mid-edit (e.g. synced away) — just re-render */
+      }
+    }
+    render();
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") finish(true);
+    if (e.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true));
+}
+
 function openTagMenu(anchor: HTMLElement, task: TaskRecord): void {
   closeTagMenu();
   const menu = document.createElement("div");
   menu.className = "tag-menu";
   menu.id = "tag-menu";
 
-  const option = (label: string, selected: boolean, onPick: () => void) => {
+  // Toggle-style: a task can belong to several buckets at once.
+  for (const bucket of repo.listBuckets()) {
+    const member = task.buckets.includes(bucket);
     const item = document.createElement("button");
     item.type = "button";
-    item.className = selected ? "tag-menu-item tag-menu-active" : "tag-menu-item";
-    item.textContent = label;
+    item.className = member ? "tag-menu-item tag-menu-active" : "tag-menu-item";
+    item.textContent = member ? `✓ ${bucket}` : bucket;
     item.addEventListener("click", () => {
-      onPick();
+      repo.toggleBucket(task.id, bucket);
       render();
     });
-    return item;
-  };
-
-  menu.append(option("inbox", task.bucket === null, () => repo.setBucket(task.id, null)));
-  for (const bucket of repo.listBuckets()) {
-    menu.append(option(bucket, task.bucket === bucket, () => repo.setBucket(task.id, bucket)));
+    menu.append(item);
+  }
+  if (repo.listBuckets().length === 0) {
+    const hint = document.createElement("div");
+    hint.className = "tag-menu-hint";
+    hint.textContent = "No tags yet — create one with “+ tag”.";
+    menu.append(hint);
   }
 
   const rect = anchor.getBoundingClientRect();
@@ -247,9 +342,7 @@ function renderList(): void {
     empty.textContent =
       filter === "all"
         ? "Nothing here yet — add your first task above."
-        : filter === "inbox"
-          ? "Inbox zero. New tasks the classifier isn't sure about land here."
-          : `No tasks tagged “${filter}” yet.`;
+        : `No tasks tagged “${filter}” yet.`;
     list.append(empty);
     return;
   }
@@ -395,6 +488,7 @@ function render(): void {
 async function main(): Promise<void> {
   repo = await Repository.open(new WebStoragePersistence(window.localStorage));
   $("#capture").addEventListener("submit", handleCapture as EventListener);
+  window.addEventListener("keydown", handleUndoKeys);
   initSyncControls();
   render();
   $<HTMLInputElement>("#capture-input").focus();

@@ -23,26 +23,26 @@ async function freshRepo() {
 describe("Repository — tasks and ordering", () => {
   it("adds new tasks to the top of the list", async () => {
     const { repo } = await freshRepo();
-    repo.addTask("first");
-    repo.addTask("second");
-    repo.addTask("third");
-    assert.deepEqual(repo.listTasks().map((t) => t.title), ["third", "second", "first"]);
+    repo.addTask("first zz");
+    repo.addTask("second zz");
+    repo.addTask("third zz");
+    assert.deepEqual(repo.listTasks().map((t) => t.title), ["third zz", "second zz", "first zz"]);
   });
 
   it("moveToTop expresses importance without priority tags", async () => {
     const { repo } = await freshRepo();
-    repo.addTask("first");
-    const important = repo.addTask("pay the bill");
-    repo.addTask("third");
+    repo.addTask("first zz");
+    const important = repo.addTask("important thing zz");
+    repo.addTask("third zz");
     repo.moveToTop(important.id);
-    assert.equal(repo.listTasks()[0]!.title, "pay the bill");
+    assert.equal(repo.listTasks()[0]!.title, "important thing zz");
   });
 
   it("moveAfter reorders between neighbors", async () => {
     const { repo } = await freshRepo();
-    const a = repo.addTask("a");
-    const b = repo.addTask("b");
-    const c = repo.addTask("c"); // list: c, b, a
+    const a = repo.addTask("aa zz");
+    const b = repo.addTask("bb zz");
+    const c = repo.addTask("cc zz"); // list: c, b, a
     repo.moveAfter(c.id, b.id); // list: b, c, a
     assert.deepEqual(repo.listTasks().map((t) => t.id), [b.id, c.id, a.id]);
     repo.moveAfter(a.id, null); // to the very top
@@ -51,7 +51,7 @@ describe("Repository — tasks and ordering", () => {
 
   it("tombstones deletes instead of removing records", async () => {
     const { repo } = await freshRepo();
-    const task = repo.addTask("temp");
+    const task = repo.addTask("temp zz");
     repo.deleteTask(task.id);
     assert.equal(repo.listTasks().length, 0);
     const doc = deserializeDoc(repo.exportDoc());
@@ -60,27 +60,89 @@ describe("Repository — tasks and ordering", () => {
 
   it("completed tasks vanish from listTasks and appear in listCompleted, recent-first", async () => {
     const { repo } = await freshRepo();
-    const a = repo.addTask("first done");
-    const b = repo.addTask("second done");
-    repo.addTask("still open");
+    const a = repo.addTask("first done zz");
+    const b = repo.addTask("second done zz");
+    repo.addTask("still open zz");
     repo.setDone(a.id, true);
     repo.setDone(b.id, true); // completed later than a
 
-    assert.deepEqual(repo.listTasks().map((t) => t.title), ["still open"]);
-    assert.deepEqual(repo.listCompleted().map((t) => t.title), ["second done", "first done"]);
+    assert.deepEqual(repo.listTasks().map((t) => t.title), ["still open zz"]);
+    assert.deepEqual(repo.listCompleted().map((t) => t.title), ["second done zz", "first done zz"]);
 
-    // Un-completing puts it back in the open list.
     repo.setDone(b.id, false);
     assert.equal(repo.getTask(b.id)!.completedAt, null);
     assert.ok(repo.listTasks().some((t) => t.id === b.id));
   });
 });
 
-describe("Repository — bucket origins", () => {
+describe("Repository — buckets, pills, and learning", () => {
+  it("filters by pill: all and named bucket; untagged shows only in All", async () => {
+    const { repo } = await freshRepo();
+    repo.createBucket("Work");
+    const untagged = repo.addTask("mystery zz");
+    repo.addTask("send the report", "Work");
+    assert.equal(repo.listTasks("all").length, 2);
+    assert.deepEqual(repo.listTasks("Work").map((t) => t.title), ["send the report"]);
+    assert.deepEqual(untagged.buckets, []);
+  });
+
+  it("auto-buckets new captures once the model has learned", async () => {
+    const { repo } = await freshRepo();
+    repo.createBucket("Snacks");
+    repo.createBucket("Work");
+    repo.addTask("crisps and dip zz", "Snacks");
+    repo.addTask("popcorn refill zz", "Snacks");
+    repo.addTask("email the quarterly report", "Work");
+    repo.addTask("review report deck slides", "Work");
+
+    const auto = repo.addTask("email the report");
+    assert.deepEqual(auto.buckets, ["Work"]);
+    // Auto-assignment must NOT train the model on its own prediction.
+    assert.deepEqual(auto.trainedBuckets, []);
+  });
+
+  it("unclear captures stay untagged (visible in All only)", async () => {
+    const { repo } = await freshRepo();
+    repo.createBucket("groceries");
+    const vague = repo.addTask("zzz unrelated gibberish qqq");
+    assert.deepEqual(vague.buckets, []);
+    assert.ok(repo.listTasks("all").some((t) => t.id === vague.id));
+    assert.equal(repo.listTasks("groceries").length, 0);
+  });
+
+  it("toggleBucket corrections retrain the classifier", async () => {
+    const { repo } = await freshRepo();
+    repo.createBucket("Errands");
+    repo.createBucket("Zone");
+    const first = repo.addTask("gymzz session leg day", "Errands");
+    const second = repo.addTask("gymzz cardio", "Errands");
+
+    for (const task of [first, second]) {
+      repo.toggleBucket(task.id, "Errands"); // remove (untrain)
+      repo.toggleBucket(task.id, "Zone"); // add (train)
+    }
+    const next = repo.addTask("gymzz leg day");
+    assert.deepEqual(next.buckets, ["Zone"]);
+  });
+
+  it("deleteBucket strips the membership but keeps others", async () => {
+    const { repo } = await freshRepo();
+    repo.createBucket("Temp");
+    repo.createBucket("Keep");
+    const task = repo.addTask("orphan me zz", "Temp");
+    repo.toggleBucket(task.id, "Keep");
+    repo.deleteBucket("Temp");
+    assert.deepEqual(repo.listBuckets(), ["Keep"]);
+    assert.deepEqual(repo.getTask(task.id)!.buckets, ["Keep"]);
+    assert.deepEqual(repo.getTask(task.id)!.trainedBuckets, ["Keep"]);
+  });
+});
+
+describe("Repository — bucket origins (legacy auto buckets)", () => {
   it("orders user buckets before auto buckets in the pill bar", async () => {
     const { repo } = await freshRepo();
-    repo.addTask("hammer and nails"); // auto-creates hardware first...
-    repo.createBucket("projects"); // ...but user buckets still sort first
+    repo.createBucket("hardware", "auto"); // e.g. created by an older version
+    repo.createBucket("projects");
     assert.deepEqual(repo.listBucketDetails(), [
       { name: "projects", auto: false },
       { name: "hardware", auto: true },
@@ -89,84 +151,27 @@ describe("Repository — bucket origins", () => {
 
   it("promotes an auto bucket to user when the user files into it", async () => {
     const { repo } = await freshRepo();
+    repo.createBucket("hardware", "auto");
     const task = repo.addTask("hammer and nails");
+    assert.deepEqual(task.buckets, ["hardware"]);
     assert.equal(repo.listBucketDetails()[0]!.auto, true);
-    repo.setBucket(task.id, null);
-    repo.setBucket(task.id, "hardware"); // explicit user move = adoption
+    repo.toggleBucket(task.id, "hardware"); // remove — not an adoption
+    assert.equal(repo.listBucketDetails()[0]!.auto, true);
+    repo.toggleBucket(task.id, "hardware"); // explicit add = adoption
     assert.deepEqual(repo.listBucketDetails(), [{ name: "hardware", auto: false }]);
-  });
-});
-
-describe("Repository — buckets, pills, and learning", () => {
-  it("filters by pill: all, inbox, and named bucket", async () => {
-    const { repo } = await freshRepo();
-    repo.createBucket("Work");
-    repo.addTask("untagged note");
-    repo.addTask("send report", "Work");
-    assert.equal(repo.listTasks("all").length, 2);
-    assert.deepEqual(repo.listTasks("inbox").map((t) => t.title), ["untagged note"]);
-    assert.deepEqual(repo.listTasks("Work").map((t) => t.title), ["send report"]);
-  });
-
-  it("auto-buckets new captures once the model has learned", async () => {
-    const { repo } = await freshRepo();
-    repo.createBucket("Groceries");
-    repo.createBucket("Work");
-    repo.addTask("buy milk and eggs", "Groceries");
-    repo.addTask("buy bread at the store", "Groceries");
-    repo.addTask("email the quarterly report", "Work");
-    repo.addTask("review report deck slides", "Work");
-
-    const auto = repo.addTask("buy more eggs");
-    assert.equal(auto.bucket, "Groceries");
-    // Auto-assignment must NOT train the model on its own prediction.
-    assert.equal(auto.trainedBucket, null);
-  });
-
-  it("low-confidence captures land in the inbox", async () => {
-    const { repo } = await freshRepo();
-    repo.createBucket("Groceries");
-    repo.addTask("buy milk", "Groceries");
-    const vague = repo.addTask("zzz unrelated gibberish qqq");
-    assert.equal(vague.bucket, null);
-    assert.deepEqual(repo.listTasks("inbox").map((t) => t.id), [vague.id]);
-  });
-
-  it("setBucket is the correction signal: untrains old, trains new", async () => {
-    const { repo } = await freshRepo();
-    repo.createBucket("Errands");
-    repo.createBucket("Health");
-    repo.addTask("gym session", "Errands");
-    const second = repo.addTask("gym cardio", "Errands");
-    repo.setBucket(second.id, "Health");
-    repo.setBucket(repo.listTasks("Errands")[0]!.id, "Health");
-
-    const next = repo.addTask("gym leg day");
-    assert.equal(next.bucket, "Health");
-  });
-
-  it("deleteBucket sends its tasks back to the inbox", async () => {
-    const { repo } = await freshRepo();
-    repo.createBucket("Temp");
-    const task = repo.addTask("orphan me", "Temp");
-    repo.deleteBucket("Temp");
-    assert.deepEqual(repo.listBuckets(), []);
-    assert.equal(repo.getTask(task.id)!.bucket, null);
-    assert.equal(repo.getTask(task.id)!.trainedBucket, null);
   });
 });
 
 describe("Persistence and merge", () => {
   it("persists after mutations and reloads identically", async () => {
     const persistence = new MemoryPersistence();
-    const options = makeOptions();
-    const repo = await Repository.open(persistence, options);
+    const repo = await Repository.open(persistence, makeOptions());
     repo.createBucket("Work");
-    repo.addTask("send report", "Work");
+    repo.addTask("send the report", "Work");
     await repo.flush();
 
     const reopened = await Repository.open(persistence, makeOptions(2_000_000));
-    assert.deepEqual(reopened.listTasks("Work").map((t) => t.title), ["send report"]);
+    assert.deepEqual(reopened.listTasks("Work").map((t) => t.title), ["send the report"]);
     assert.deepEqual(reopened.listBuckets(), ["Work"]);
   });
 
@@ -178,17 +183,45 @@ describe("Persistence and merge", () => {
     };
     const persistence = new WebStoragePersistence(storage);
     const repo = await Repository.open(persistence, makeOptions());
-    repo.addTask("hello");
+    repo.addTask("hello zz");
     await repo.flush();
     const reopened = await Repository.open(persistence, makeOptions(2_000_000));
-    assert.equal(reopened.listTasks()[0]!.title, "hello");
+    assert.equal(reopened.listTasks()[0]!.title, "hello zz");
+  });
+
+  it("migrates legacy single-bucket records on load", async () => {
+    const persistence = new MemoryPersistence();
+    const ts = "2026-01-01T00:00:00.000Z";
+    const legacy = {
+      version: 1,
+      tasks: {
+        t1: {
+          id: "t1", title: "old task", bucket: "Work", done: false, order: 0,
+          createdAt: ts, modifiedAt: ts, deletedAt: null, trainedBucket: "Work",
+        },
+        t2: {
+          id: "t2", title: "old untagged", bucket: null, done: false, order: 1,
+          createdAt: ts, modifiedAt: ts, deletedAt: null, trainedBucket: null,
+        },
+      },
+      buckets: { Work: { name: "Work", createdAt: ts, modifiedAt: ts, deletedAt: null } },
+      model: { version: 1, totalDocs: 0, buckets: {} },
+      modelModifiedAt: ts,
+    };
+    await persistence.save(JSON.stringify(legacy));
+
+    const repo = await Repository.open(persistence, makeOptions());
+    assert.deepEqual(repo.getTask("t1")!.buckets, ["Work"]);
+    assert.deepEqual(repo.getTask("t1")!.trainedBuckets, ["Work"]);
+    assert.deepEqual(repo.getTask("t2")!.buckets, []);
+    assert.deepEqual(repo.listTasks("Work").map((t) => t.id), ["t1"]);
   });
 
   it("mergeDocs is last-write-wins per record, tombstones included", () => {
     const base = createDoc(new Date(1000));
     const mkTask = (id: string, title: string, modifiedAt: string, deletedAt: string | null = null) => ({
-      id, title, bucket: null, done: false, order: 0,
-      createdAt: "2026-01-01T00:00:00.000Z", modifiedAt, deletedAt, trainedBucket: null,
+      id, title, buckets: [] as string[], done: false, completedAt: null, order: 0,
+      createdAt: "2026-01-01T00:00:00.000Z", modifiedAt, deletedAt, trainedBuckets: [] as string[],
     });
 
     const a = deserializeDoc(serializeDoc(base));
@@ -203,22 +236,19 @@ describe("Persistence and merge", () => {
     assert.equal(merged.tasks["t2"]!.title, "only on A");
     assert.ok(merged.tasks["t3"]!.deletedAt !== null);
 
-    // Commutative up to timestamp ties.
     const mergedReverse = mergeDocs(b, a);
     assert.deepEqual(merged.tasks, mergedReverse.tasks);
   });
 
   it("mergeRemote folds another device's doc into a live repository", async () => {
-    const optionsA = makeOptions(1_000_000, "a");
-    const optionsB = makeOptions(5_000_000, "b"); // device B's clock is later
-    const repoA = await Repository.open(new MemoryPersistence(), optionsA);
-    const repoB = await Repository.open(new MemoryPersistence(), optionsB);
+    const repoA = await Repository.open(new MemoryPersistence(), makeOptions(1_000_000, "a"));
+    const repoB = await Repository.open(new MemoryPersistence(), makeOptions(5_000_000, "b"));
     repoA.createBucket("Work");
     repoA.addTask("from device A", "Work");
-    repoB.addTask("from device B");
+    repoB.addTask("from device B zz");
 
     repoA.mergeRemote(deserializeDoc(repoB.exportDoc()));
     const titles = repoA.listTasks().map((t) => t.title);
-    assert.ok(titles.includes("from device A") && titles.includes("from device B"));
+    assert.ok(titles.includes("from device A") && titles.includes("from device B zz"));
   });
 });

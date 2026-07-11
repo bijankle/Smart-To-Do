@@ -14,8 +14,13 @@ import { createModel } from "../engine/classify.js";
 export interface TaskRecord {
   id: string;
   title: string;
-  /** Bucket name, or null = Inbox / untagged. */
-  bucket: string | null;
+  /**
+   * Bucket memberships — one task can live in several buckets at once
+   * ("onions and a hammer" → groceries AND hardware) and is the same record
+   * everywhere, so completing it anywhere completes it everywhere.
+   * Empty = untagged (visible only in All).
+   */
+  buckets: string[];
   done: boolean;
   /** When the task was checked off; completed lists sort most-recent-first. */
   completedAt?: string | null;
@@ -25,17 +30,10 @@ export interface TaskRecord {
   modifiedAt: string;
   deletedAt: string | null;
   /**
-   * The bucket this task's text was last trained into, so a later re-bucketing
-   * knows exactly what to untrain. Null when the task never trained the model.
+   * Buckets this task's text has been trained into, so a later re-tagging
+   * knows exactly what to untrain.
    */
-  trainedBucket: string | null;
-  /**
-   * List captures ("i need celery and onions") split into per-item child
-   * tasks filed in the bucket, while the original text stays as an untagged
-   * parent. Completing the parent completes its children.
-   */
-  childIds?: string[];
-  parentId?: string;
+  trainedBuckets: string[];
 }
 
 export interface BucketRecord {
@@ -108,8 +106,27 @@ export function serializeDoc(doc: StoreDoc): string {
   return JSON.stringify(doc);
 }
 
+/** Fields from earlier schema revisions, normalized away on load. */
+interface LegacyTaskFields {
+  bucket?: string | null;
+  trainedBucket?: string | null;
+  childIds?: string[];
+  parentId?: string;
+}
+
 export function deserializeDoc(data: string): StoreDoc {
   const doc = JSON.parse(data) as StoreDoc;
   if (doc.version !== 1) throw new Error(`Unsupported store version: ${String(doc.version)}`);
+  // Migrate records written before multi-bucket membership existed.
+  for (const task of Object.values(doc.tasks) as Array<TaskRecord & LegacyTaskFields>) {
+    if (!Array.isArray(task.buckets)) task.buckets = task.bucket ? [task.bucket] : [];
+    if (!Array.isArray(task.trainedBuckets)) {
+      task.trainedBuckets = task.trainedBucket ? [task.trainedBucket] : [];
+    }
+    delete task.bucket;
+    delete task.trainedBucket;
+    delete task.childIds;
+    delete task.parentId;
+  }
   return doc;
 }

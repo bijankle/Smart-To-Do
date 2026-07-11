@@ -35,19 +35,20 @@ interface RawConcept {
 const RAW: RawConcept[] = [
   {
     name: "groceries",
-    aliases: "groceries grocery food supermarket shopping",
+    aliases:
+      "groceries grocery food supermarket shopping coles woolworths woolies aldi iga costco kroger safeway tesco lidl",
     vocabulary:
       "milk egg bread butter cheese yogurt cream celery onion garlic potato tomato lettuce spinach carrot broccoli cucumber pepper mushroom apple banana orange grape berry strawberry lemon lime avocado rice pasta noodle flour sugar salt spice cereal oat granola coffee tea juice soda beer wine chicken beef pork fish salmon shrimp bacon sausage ham turkey tofu bean lentil nut almond peanut snack chip cracker cookie chocolate candy sauce ketchup mustard mayo oil vinegar honey jam jelly frozen pizza soup produce dairy bakery deli fruit vegetable meat seafood grocery groceries supermarket",
   },
   {
     name: "hardware",
-    aliases: "hardware tools tool diy workshop",
+    aliases: "hardware tools tool diy workshop bunnings mitre lowes homedepot screwfix",
     vocabulary:
       "hammer nail screw screwdriver drill bit saw wrench plier bolt washer anchor stud lumber wood plank plywood paint primer brush roller caulk glue tape measure level sander sandpaper ladder toolbox socket blade tile grout cement concrete pipe fitting valve wire cable outlet switch breaker fuse hinge knob lock shelf bracket hook lightbulb bulb battery filter duct insulation drywall stain varnish clamp chisel",
   },
   {
     name: "electronics",
-    aliases: "electronics electronic tech gadgets gadget",
+    aliases: "electronics electronic tech gadgets gadget jb jbhifi officeworks bestbuy harvey",
     vocabulary:
       "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud speaker soundbar phone tablet camera webcam drone console controller router modem printer ink toner cartridge ssd harddrive drive ram memory gpu cpu processor motherboard case fan projector smartwatch fitbit kindle remote antenna surge protector powerbank sim stylus tripod microphone gopro chromecast roku firestick",
   },
@@ -65,9 +66,9 @@ const RAW: RawConcept[] = [
   },
   {
     name: "health",
-    aliases: "health fitness gym medical wellness",
+    aliases: "health fitness gym medical wellness chemist pharmacy priceline",
     vocabulary:
-      "gym workout exercise run jog yoga pilate stretch cardio weight lift squat deadlift doctor dentist optometrist appointment checkup prescription medicine pill vitamin supplement therapy therapist physio massage diet calorie protein sleep meditation hospital clinic vaccine blood test xray mri allergy flu injury recovery",
+      "gym workout exercise run jog yoga pilate stretch cardio weight lift squat deadlift doctor dentist optometrist appointment checkup assessment screening scan referral specialist surgery prescription medicine pill vitamin supplement therapy therapist physio massage diet calorie protein sleep meditation hospital clinic vaccine blood test xray mri allergy flu injury recovery",
   },
   {
     name: "finance",
@@ -77,7 +78,7 @@ const RAW: RawConcept[] = [
   },
   {
     name: "home",
-    aliases: "home house household chores cleaning",
+    aliases: "home house household chores cleaning ikea kmart",
     vocabulary:
       "clean cleaning vacuum mop dust laundry dish dishe trash garbage recycle recycling organize declutter tidy bed sheet towel iron fold closet garage attic basement lawn mow rake leaf snow shovel gutter window curtain blind furniture couch sofa repair fix leak faucet toilet shower drain plant water fridge freezer oven stove microwave dishwasher dryer washer smoke detector thermostat",
   },
@@ -89,13 +90,13 @@ const RAW: RawConcept[] = [
   },
   {
     name: "car",
-    aliases: "car auto vehicle garage",
+    aliases: "car auto vehicle garage supercheap autobarn",
     vocabulary:
       "car oil change tire rotate rotation brake engine battery wash gasoline fuel mechanic service registration inspection license plate wiper windshield transmission coolant antifreeze detail alignment muffler exhaust headlight taillight bumper dent scratch tow parking",
   },
   {
     name: "pets",
-    aliases: "pets pet dog cat animals",
+    aliases: "pets pet dog cat animals petbarn petstock",
     vocabulary:
       "dog cat puppy kitten pet vet veterinarian groom grooming leash collar harness litter kibble treat feed feeding walk crate kennel aquarium hamster rabbit bird cage flea tick heartworm microchip adoption shelter",
   },
@@ -111,11 +112,16 @@ function stemWords(words: string): string[] {
   return [...new Set(words.split(/\s+/).filter(Boolean).map(stem))];
 }
 
-export const CONCEPTS: Concept[] = RAW.map((raw) => ({
-  name: raw.name,
-  aliases: new Set(stemWords(raw.aliases)),
-  vocabulary: stemWords(raw.vocabulary),
-}));
+export const CONCEPTS: Concept[] = RAW.map((raw) => {
+  const aliases = stemWords(raw.aliases);
+  return {
+    name: raw.name,
+    aliases: new Set(aliases),
+    // Alias words double as vocabulary so "bunnings run" or "medical
+    // assessment" hit their concept even without a specific item word.
+    vocabulary: [...new Set([...stemWords(raw.vocabulary), ...aliases])],
+  };
+});
 
 /**
  * Map a bucket name to a concept: any stemmed word of the name that appears
@@ -130,33 +136,44 @@ export function conceptForBucketName(name: string): Concept | null {
   return null;
 }
 
-export interface ConceptMatch {
-  concept: Concept;
-  /** Number of DISTINCT vocabulary words found in the text. */
-  hits: number;
-}
-
 /**
- * Best concept for already-tokenized capture text.
+ * ALL concepts a capture belongs to — a mixed capture ("onions and a hammer")
+ * maps to several buckets; the task itself is never split.
  *
- * Two distinct vocabulary hits always match ("celery and onions"). A single
- * hit matches only when it is decisive: no other concept recognizes anything,
- * and the recognized word makes up at least half of the informative text —
- * so a bare "laptop" files into electronics, while "watch the onion movie
- * trailer" (one grocery word out of four) stays in the Inbox.
+ * Rules, tuned to stay conservative:
+ *  - Concepts with 2+ distinct vocabulary hits always qualify.
+ *  - When NO concept reaches 2 hits, single-hit concepts qualify only if at
+ *    least half of the informative words are recognized overall — so a bare
+ *    "laptop" files into electronics and "onions and a hammer" files into
+ *    both, while "watch the onion movie trailer" (1 recognized word of 4)
+ *    stays untagged.
  */
-export function matchConcept(tokens: string[]): ConceptMatch | null {
+export function matchConcepts(tokens: string[]): Concept[] {
   const unique = new Set(tokens);
-  const scored: ConceptMatch[] = [];
+  if (unique.size === 0) return [];
+
+  const recognized = new Set<string>();
+  const scored: Array<{ concept: Concept; hitWords: string[] }> = [];
   for (const concept of CONCEPTS) {
-    let hits = 0;
-    for (const word of concept.vocabulary) if (unique.has(word)) hits += 1;
-    if (hits > 0) scored.push({ concept, hits });
+    const hitWords = concept.vocabulary.filter((word) => unique.has(word));
+    if (hitWords.length > 0) {
+      scored.push({ concept, hitWords });
+      for (const word of hitWords) recognized.add(word);
+    }
   }
-  if (scored.length === 0) return null;
-  scored.sort((a, b) => b.hits - a.hits);
-  const best = scored[0]!;
-  if (best.hits >= 2) return best;
-  if (scored.length === 1 && best.hits * 2 >= unique.size) return best;
-  return null;
+
+  const strong = scored.filter((s) => s.hitWords.length >= 2);
+  const claimed = new Set(strong.flatMap((s) => s.hitWords));
+  // A single-hit concept still counts when the text is mostly recognized
+  // words AND its hit word isn't already explained by a strong concept —
+  // so "celery and a drill bit" tags groceries alongside hardware, while
+  // the lone "email" in a work-heavy sentence doesn't drag in computer.
+  const weak =
+    recognized.size * 2 >= unique.size
+      ? scored.filter((s) => s.hitWords.length === 1 && !claimed.has(s.hitWords[0]!))
+      : [];
+
+  return [...strong.sort((a, b) => b.hitWords.length - a.hitWords.length), ...weak].map(
+    (s) => s.concept,
+  );
 }

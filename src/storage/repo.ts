@@ -2,18 +2,21 @@
  * Phase 2 — Repository: the single API surface the UI talks to.
  *
  * Responsibilities:
- *  - Task CRUD with tombstone deletes and manual ordering (new tasks and
- *    "move to top" go to the head of the list — importance is expressed by
- *    position, not priority tags).
- *  - Auto-bucketing on capture via the Naive Bayes classifier; the model is
- *    trained ONLY by explicit user actions (assigning or moving a task to a
- *    bucket), never by its own predictions, so it can't drift on its own.
+ *  - Task CRUD with tombstone deletes and manual ordering (new tasks enter at
+ *    the top — importance is expressed by position, not priority tags).
+ *  - Multi-bucket membership: a capture can belong to several buckets at once
+ *    ("onions and a hammer" → groceries AND hardware) but is one record, so
+ *    completing it anywhere completes it everywhere. Tasks are never split.
+ *  - Auto-tagging on capture via the Naive Bayes classifier with the seed
+ *    lexicon as fallback; the model is trained ONLY by explicit user actions
+ *    (capturing with a #tag or toggling a bucket), never by its own
+ *    predictions, so it can't drift on its own.
  *  - Persistence after every mutation through the injected adapter.
  */
 
 import { classify, ensureBucket, seed, train, untrain } from "../engine/classify.js";
-import { conceptForBucketName, matchConcept, type Concept } from "../engine/lexicon.js";
-import { stem, tokenize } from "../engine/tokenize.js";
+import { conceptForBucketName, matchConcepts, type Concept } from "../engine/lexicon.js";
+import { tokenize } from "../engine/tokenize.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD } from "../engine/parse.js";
 import {
   createDoc,
@@ -31,8 +34,8 @@ export interface RepositoryOptions {
   confidenceThreshold?: number;
 }
 
-/** Pill-bar filter: 'all', 'inbox' (untagged), or a bucket name. */
-export type TaskFilter = "all" | "inbox" | string;
+/** Pill-bar filter: 'all' or a bucket name. Untagged tasks appear only in 'all'. */
+export type TaskFilter = "all" | string;
 
 export class Repository {
   private readonly now: () => Date;
@@ -84,52 +87,77 @@ export class Repository {
 
   /**
    * Capture a task. With an explicit bucket the classifier is trained on it;
-   * otherwise the classifier suggests one (below the confidence threshold the
-   * task lands untagged, i.e. in the Inbox). New tasks enter at the top.
+   * otherwise the classifier suggests one, with the seed lexicon as fallback —
+   * which may tag the task into SEVERAL buckets for mixed captures. Unclear
+   * captures stay untagged (visible in All only). New tasks enter at the top.
    */
   addTask(title: string, bucket?: string): TaskRecord {
     const trimmed = title.trim();
     const ts = this.now().toISOString();
-    let assigned: string | null = null;
-    let trainedBucket: string | null = null;
+    let assigned: string[] = [];
+    const trainedBuckets: string[] = [];
 
     if (bucket !== undefined) {
       this.requireBucket(bucket);
-      assigned = bucket;
+      assigned = [bucket];
       train(this.doc.model, bucket, trimmed);
       this.doc.modelModifiedAt = ts;
-      trainedBucket = bucket;
+      trainedBuckets.push(bucket);
       this.promoteBucket(bucket);
     } else {
-      const suggestion = classify(this.doc.model, trimmed);
-      if (suggestion && suggestion.confidence >= this.threshold && this.isLiveBucket(suggestion.bucket)) {
-        assigned = suggestion.bucket;
-      } else {
-        assigned = this.assignByLexicon(trimmed);
-      }
-      // List captures split into per-item children filed in the bucket,
-      // with the original text kept as an untagged parent in "All".
-      if (assigned !== null) {
-        const items = this.splitListItems(trimmed, assigned);
-        if (items) return this.addSplitTasks(trimmed, items, assigned, ts);
-      }
+      assigned = this.autoTag(trimmed);
     }
 
     const task: TaskRecord = {
       id: this.newId(),
       title: trimmed,
-      bucket: assigned,
+      buckets: assigned,
       done: false,
       completedAt: null,
       order: this.topOrder(),
       createdAt: ts,
       modifiedAt: ts,
       deletedAt: null,
-      trainedBucket,
+      trainedBuckets,
     };
     this.doc.tasks[task.id] = task;
     this.scheduleSave();
     return task;
+  }
+
+  /**
+   * Suggest buckets for a capture: the statistical classifier first, then the
+   * seed lexicon (which may map a mixed capture to SEVERAL buckets). Tagging
+   * only ever targets buckets the user already has — nothing is auto-created.
+   */
+  private autoTag(text: string): string[] {
+    const lexicon: string[] = [];
+    for (const concept of matchConcepts(tokenize(text))) {
+      const existing = this.liveBucketForConcept(concept);
+      if (existing) lexicon.push(existing);
+    }
+    // A mixed capture spanning several buckets ("celery and a drill bit")
+    // beats the classifier's single-bucket guess, which would otherwise let
+    // the dominant category drown out the other item.
+    if (lexicon.length >= 2) return lexicon;
+
+    const suggestion = classify(this.doc.model, text);
+    // Coverage guard: one recognized word inside a long unrelated sentence
+    // ("watch the onion movie trailer") is coincidence, not a category.
+    const covered =
+      suggestion !== null &&
+      (suggestion.tokensUsed >= 2 || suggestion.tokensUsed * 2 >= suggestion.tokensTotal);
+    if (suggestion && covered && suggestion.confidence >= this.threshold && this.isLiveBucket(suggestion.bucket)) {
+      return [suggestion.bucket];
+    }
+    return lexicon;
+  }
+
+  private liveBucketForConcept(concept: Concept): string | null {
+    for (const name of this.listBuckets()) {
+      if (conceptForBucketName(name) === concept) return name;
+    }
+    return null;
   }
 
   /** Live, OPEN tasks for a pill filter, sorted top-first. Completed tasks vanish from here. */
@@ -151,74 +179,7 @@ export class Repository {
   }
 
   private matchesFilter(task: TaskRecord, filter: TaskFilter): boolean {
-    if (filter === "all") return true;
-    if (filter === "inbox") {
-      // A parent whose items are filed in a bucket is not "untriaged".
-      return task.bucket === null && !(task.childIds && task.childIds.length > 0);
-    }
-    return task.bucket === filter;
-  }
-
-  /**
-   * Split a list-style capture ("i need celery and onions") into one child
-   * title per segment, using the bucket's concept vocabulary. Only splits
-   * when there are 2+ segments and EVERY segment contains a recognized item —
-   * otherwise the capture stays a single task ("mac and cheese" doesn't split).
-   */
-  private splitListItems(title: string, bucket: string): string[] | null {
-    const concept = conceptForBucketName(bucket);
-    if (!concept) return null;
-    const vocab = new Set(concept.vocabulary);
-    const segments = title.split(/,|\band\b|&/i).map((s) => s.trim()).filter(Boolean);
-    if (segments.length < 2) return null;
-
-    const items: string[] = [];
-    for (const segment of segments) {
-      const matched = segment
-        .split(/\s+/)
-        .filter((word) => vocab.has(stem(word.toLowerCase().replace(/[^a-z0-9]/g, ""))));
-      if (matched.length === 0) return null;
-      items.push(matched.join(" "));
-    }
-    return items;
-  }
-
-  private addSplitTasks(fullTitle: string, items: string[], bucket: string, ts: string): TaskRecord {
-    const parent: TaskRecord = {
-      id: this.newId(),
-      title: fullTitle,
-      bucket: null,
-      done: false,
-      completedAt: null,
-      order: this.topOrder(),
-      createdAt: ts,
-      modifiedAt: ts,
-      deletedAt: null,
-      trainedBucket: null,
-      childIds: [],
-    };
-    this.doc.tasks[parent.id] = parent;
-
-    // Insert in reverse so the first item ends up highest in the list.
-    for (const item of [...items].reverse()) {
-      const child: TaskRecord = {
-        id: this.newId(),
-        title: item,
-        bucket,
-        done: false,
-        completedAt: null,
-        order: this.topOrder(),
-        createdAt: ts,
-        modifiedAt: ts,
-        deletedAt: null,
-        trainedBucket: null,
-        parentId: parent.id,
-      };
-      this.doc.tasks[child.id] = child;
-      parent.childIds!.unshift(child.id);
-    }
-    this.scheduleSave();
-    return parent;
+    return filter === "all" ? true : task.buckets.includes(filter);
   }
 
   getTask(id: string): TaskRecord | null {
@@ -226,32 +187,30 @@ export class Repository {
     return task && task.deletedAt === null ? task : null;
   }
 
-  /** Completing a parent completes its children (and un-completing restores them). */
   setDone(id: string, done: boolean): void {
     const task = this.requireTask(id);
-    const ts = this.now().toISOString();
-    const apply = (t: TaskRecord) => {
-      t.done = done;
-      t.completedAt = done ? ts : null;
-      t.modifiedAt = ts;
-    };
-    apply(task);
-    for (const childId of task.childIds ?? []) {
-      const child = this.doc.tasks[childId];
-      if (child && child.deletedAt === null) apply(child);
-    }
-    this.scheduleSave();
+    task.done = done;
+    task.completedAt = done ? this.now().toISOString() : null;
+    this.touch(task);
   }
 
   renameTask(id: string, title: string): void {
     const task = this.requireTask(id);
+    const trimmed = title.trim();
     // Re-point any training at the new wording so untrain stays symmetric.
-    if (task.trainedBucket !== null) {
-      untrain(this.doc.model, task.trainedBucket, task.title);
-      train(this.doc.model, task.trainedBucket, title.trim());
+    if (task.trainedBuckets.length > 0) {
+      for (const bucket of task.trainedBuckets) {
+        untrain(this.doc.model, bucket, task.title);
+        train(this.doc.model, bucket, trimmed);
+      }
       this.doc.modelModifiedAt = this.now().toISOString();
     }
-    task.title = title.trim();
+    task.title = trimmed;
+    // The user hasn't hand-filed this task, so fixing a typo ("medcical" →
+    // "medical") should re-run auto-tagging against the corrected text.
+    if (task.trainedBuckets.length === 0 && !task.done) {
+      task.buckets = this.autoTag(trimmed);
+    }
     this.touch(task);
   }
 
@@ -262,57 +221,29 @@ export class Repository {
   }
 
   /**
-   * Move a task to a bucket (or null = Inbox). This is the user's correction
-   * signal: the previous training (if any) is reversed and the new bucket is
-   * trained, so the classifier converges on the user's real filing habits.
+   * Toggle a task's membership in a bucket — the user's correction signal.
+   * Adding trains the classifier on the pairing (and adopts auto buckets);
+   * removing reverses any training this task contributed there.
    */
-  setBucket(id: string, bucket: string | null): void {
+  toggleBucket(id: string, bucket: string): void {
     const task = this.requireTask(id);
-    if (task.bucket === bucket) return;
-
-    if (task.trainedBucket !== null) {
-      untrain(this.doc.model, task.trainedBucket, task.title);
-      task.trainedBucket = null;
-    }
-    if (bucket !== null) {
+    const ts = this.now().toISOString();
+    if (task.buckets.includes(bucket)) {
+      task.buckets = task.buckets.filter((b) => b !== bucket);
+      if (task.trainedBuckets.includes(bucket)) {
+        untrain(this.doc.model, bucket, task.title);
+        task.trainedBuckets = task.trainedBuckets.filter((b) => b !== bucket);
+        this.doc.modelModifiedAt = ts;
+      }
+    } else {
       this.requireBucket(bucket);
+      task.buckets = [...task.buckets, bucket];
       train(this.doc.model, bucket, task.title);
-      task.trainedBucket = bucket;
+      task.trainedBuckets = [...task.trainedBuckets, bucket];
+      this.doc.modelModifiedAt = ts;
       this.promoteBucket(bucket);
     }
-    this.doc.modelModifiedAt = this.now().toISOString();
-    task.bucket = bucket;
     this.touch(task);
-  }
-
-  /**
-   * Fallback when the statistical classifier is unsure: if the text clearly
-   * matches a seed-lexicon concept (≥2 distinct vocabulary words), file it
-   * into the matching existing bucket — or auto-create that bucket, unless
-   * the user previously deleted one for the same concept (deletion is a
-   * choice we respect; we never resurrect it).
-   */
-  private assignByLexicon(text: string): string | null {
-    const match = matchConcept(tokenize(text));
-    if (!match) return null;
-
-    const existing = this.liveBucketForConcept(match.concept);
-    if (existing) return existing;
-
-    for (const bucket of Object.values(this.doc.buckets)) {
-      if (bucket.deletedAt !== null && conceptForBucketName(bucket.name) === match.concept) {
-        return null;
-      }
-    }
-    this.createBucket(match.concept.name, "auto");
-    return match.concept.name;
-  }
-
-  private liveBucketForConcept(concept: Concept): string | null {
-    for (const name of this.listBuckets()) {
-      if (conceptForBucketName(name) === concept) return name;
-    }
-    return null;
   }
 
   // ---- manual ordering ---------------------------------------------------
@@ -398,7 +329,7 @@ export class Repository {
     }
   }
 
-  /** Tombstone the bucket; its live tasks fall back to the Inbox. */
+  /** Tombstone the bucket; tasks lose that membership (other memberships stay). */
   deleteBucket(name: string): void {
     const bucket = this.doc.buckets[name];
     if (!bucket || bucket.deletedAt !== null) return;
@@ -406,15 +337,14 @@ export class Repository {
     bucket.deletedAt = ts;
     bucket.modifiedAt = ts;
     for (const task of Object.values(this.doc.tasks)) {
-      if (task.deletedAt === null && task.bucket === name) {
-        if (task.trainedBucket === name) {
-          untrain(this.doc.model, name, task.title);
-          task.trainedBucket = null;
-          this.doc.modelModifiedAt = ts;
-        }
-        task.bucket = null;
-        task.modifiedAt = ts;
+      if (task.deletedAt !== null || !task.buckets.includes(name)) continue;
+      task.buckets = task.buckets.filter((b) => b !== name);
+      if (task.trainedBuckets.includes(name)) {
+        untrain(this.doc.model, name, task.title);
+        task.trainedBuckets = task.trainedBuckets.filter((b) => b !== name);
+        this.doc.modelModifiedAt = ts;
       }
+      task.modifiedAt = ts;
     }
     this.scheduleSave();
   }
