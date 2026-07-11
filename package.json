@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "build": "tsc",
+    "start": "tsc && node tools/serve.mjs",
     "test": "tsc && node --test \"dist/tests/*.test.js\""
   },
   "devDependencies": {

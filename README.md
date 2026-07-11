@@ -13,7 +13,7 @@ A local, cross-platform smart to-do list. Tasks are categorized **entirely on-de
 ┌─────────────────────────────────────────────┐
 │ 4. Sync Adapter (cloud remote, pluggable)   │  Phase 4
 ├─────────────────────────────────────────────┤
-│ 3. UI Shell (installable PWA, Blurprint UI) │  Phase 3
+│ 3. UI Shell (installable PWA, Blurprint UI) │  Phase 3  ✅
 ├─────────────────────────────────────────────┤
 │ 2. Storage + Classifier Training Store      │  Phase 2  ✅
 ├─────────────────────────────────────────────┤
@@ -54,9 +54,26 @@ Parsing-engine constants (dormant while the date UI is off): `"friday"`-style wo
 
 The UI follows the **Blurprint** design guide (Discord's geometry on a white, print-friendly canvas). All tokens live in `src/ui/theme.css`; components must consume the CSS variables rather than raw hex values.
 
+## Running the app
+
+Requires [Node.js](https://nodejs.org) (LTS). Then, from the project folder:
+
+```bash
+npm install     # one-time setup (dev-only deps: typescript, @types/node)
+npm start       # builds and serves the app
+```
+
+…and open **http://localhost:4173** in your browser. Your tasks are saved in the browser's local storage on that machine (cloud sync arrives in Phase 4). Stop the server with `Ctrl+C`.
+
+Try it out:
+
+- Type `buy milk #groceries` — the `#tag` files the task *and* teaches the classifier (new tags are created automatically).
+- After a few tagged examples, type `buy eggs` with no tag — it auto-files into `groceries`.
+- Tasks the classifier isn't confident about land in the **Inbox** pill; click a task's tag chip to move it, which trains the model.
+- The `↑` button moves a task to the top — importance is position, not priority tags.
+
 ## Development
 
 ```bash
-npm install     # dev-only deps: typescript, @types/node
 npm test        # compile + run the node:test suites
 ```

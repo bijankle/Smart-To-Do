@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#5865f2" />
+  <title>Smart To-Do</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='22' fill='%235865F2'/%3E%3Ctext x='32' y='44' font-family='sans-serif' font-size='36' font-weight='800' fill='%23fff' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./src/ui/theme.css" />
+  <link rel="stylesheet" href="./src/ui/app.css" />
+  <script type="module" src="./dist/src/ui/app.js"></script>
+</head>
+<body>
+  <main class="app">
+    <header class="app-header">
+      <div class="app-logo">S</div>
+      <div class="app-titles">
+        <span class="app-name">Smart To-Do</span>
+        <span class="app-sub">learns where your tasks go</span>
+      </div>
+    </header>
+
+    <form id="capture" class="capture" autocomplete="off">
+      <input id="capture-input" class="capture-input" type="text"
+             placeholder="Add a task… (#tag files &amp; teaches it)" />
+      <button type="submit" class="btn-primary">Add</button>
+    </form>
+
+    <nav id="pills" class="pills" aria-label="Tag filters"></nav>
+
+    <section id="list" class="list" aria-live="polite"></section>
+
+    <footer id="footer" class="footer"></footer>
+  </main>
+</body>
+</html>
