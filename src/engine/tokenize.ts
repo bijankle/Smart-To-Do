@@ -17,8 +17,14 @@ const STOPWORDS = new Set([
   "will", "with",
 ]);
 
-/** Light plural stem: "onions" → "onion"; keeps short words and "-ss" intact. */
+/**
+ * Light plural stem: "onions" → "onion", "batteries" → "battery",
+ * "brushes" → "brush"; keeps short words and "-ss" intact. ("-ie" words like
+ * cookies → "cooky" mis-stem, but the fuzzy layer snaps those back.)
+ */
 export function stem(token: string): string {
+  if (token.length > 4 && token.endsWith("ies")) return token.slice(0, -3) + "y";
+  if (token.length > 3 && /(?:ses|xes|zes|ches|shes)$/.test(token)) return token.slice(0, -2);
   return token.length > 3 && token.endsWith("s") && !token.endsWith("ss")
     ? token.slice(0, -1)
     : token;
@@ -66,13 +72,38 @@ export function editDistance(a: string, b: string, max: number): number {
 }
 
 /**
+ * Common English words that must never be treated as typos of catalogue
+ * words — a frequent word in a sentence is almost never a misspelling
+ * ("trailer" is not a typo of "trainer", "cough" is not "couch"). Exact
+ * vocabulary matches still apply; only fuzzy correction is blocked.
+ */
+const NO_FUZZY = new Set([
+  "about", "after", "afternoon", "another", "answer", "anyone", "anything",
+  "around", "back", "before", "best", "big", "call", "come", "done", "early",
+  "episode", "evening", "everything", "finish", "find", "first", "friend",
+  "front", "going", "gone", "good", "great", "high", "house", "idea", "issue",
+  "kid", "last", "later", "leave", "left", "little", "long", "look", "low",
+  "mate", "maybe", "meeting", "month", "morning", "movie", "musing", "near",
+  "next", "nice", "night", "nothing", "other", "over", "people", "person",
+  "place", "problem", "question", "random", "ready", "really", "right",
+  "room", "school", "season", "send", "series", "short", "show", "side",
+  "small", "someone", "something", "start", "story", "stuff", "sure", "tell",
+  "text", "thing", "thought", "time", "today", "tomorrow", "tonight",
+  "trailer", "under", "unrelated", "very", "watch", "week", "weekend",
+  "word", "world", "year", "monday", "tuesday", "wednesday", "thursday",
+  "friday", "saturday", "sunday",
+]);
+
+/**
  * Typo failsafe: map an unknown token onto the vocabulary. Tries, in order:
  * exact match, digit substitution, then bounded edit distance — 1 edit for
  * 5+ letter words, 2 edits for 9+. Short words stay exact-only so "ball"
- * can never drift into "balm". Returns null when nothing plausible matches.
+ * can never drift into "balm", and common English words are never treated
+ * as typos. Returns null when nothing plausible matches.
  */
 export function correctToken(token: string, vocab: Set<string>): string | null {
   if (vocab.has(token)) return token;
+  if (NO_FUZZY.has(token)) return null;
 
   if (/\d/.test(token)) {
     const swapped = stem(token.replace(/[0134579]/g, (d) => DIGIT_SUBS[d]!));
