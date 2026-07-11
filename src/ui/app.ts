@@ -148,6 +148,43 @@ function mediaConcept(media: MediaLink): "books" | "films" | "music" {
   return "films";
 }
 
+/** Which media concept a linked task belongs to, from its buckets. */
+function taskMediaConcept(task: TaskRecord): "books" | "films" | "music" | null {
+  for (const concept of ["films", "books", "music"] as const) {
+    const buckets = repo.bucketsForConceptName(concept);
+    if (task.buckets.some((b) => buckets.includes(b))) return concept;
+  }
+  return null;
+}
+
+/**
+ * Re-enrich linked tasks whose info is empty — enrichment is a one-shot at
+ * paste/heal time, so tasks created before richer data (or an OMDb key) got
+ * a link but no details. Runs once per task per session; picks up the OMDb
+ * key automatically.
+ */
+const reEnriched = new Set<string>();
+function reEnrichLinkedTasks(): void {
+  if (!navigator.onLine) return;
+  for (const task of repo.listTasks("all")) {
+    if (!task.link || reEnriched.has(task.id)) continue;
+    if (task.info && Object.keys(task.info).length > 0) continue;
+    reEnriched.add(task.id);
+
+    let media = parseMediaLink(task.link);
+    if (!media || media.kind === "link") {
+      const concept = taskMediaConcept(task);
+      if (!concept) continue;
+      const kind =
+        concept === "films" ? "imdb-share" : concept === "books" ? "goodreads-share" : "spotify-share";
+      media = { kind, url: task.link, id: null, slugTitle: task.title, year: null };
+    } else if (!media.slugTitle) {
+      media = { ...media, slugTitle: task.title };
+    }
+    void enrichLinkedTask(task.id, media);
+  }
+}
+
 function healPlainMediaTasks(): void {
   for (const task of repo.listTasks("all")) {
     if (task.link) continue;
@@ -160,7 +197,8 @@ function healPlainMediaTasks(): void {
         ? titleCase(media.slugTitle)
         : media.slugTitle ?? task.title;
     repo.relinkMedia(task.id, title, buckets, media.url);
-    void enrichLinkedTask(task.id, media);
+    // Enrichment is handled by reEnrichLinkedTasks (runs next), which also
+    // picks up the OMDb key — no direct fetch here, to avoid a double call.
   }
 }
 
@@ -752,6 +790,7 @@ async function main(): Promise<void> {
   repo.applyStoreSetup(MY_PILLS, GENERIC_REMAP);
   repo.retagUntagged();
   healPlainMediaTasks();
+  reEnrichLinkedTasks();
   void webCheckUntagged();
   $("#capture").addEventListener("submit", handleCapture as EventListener);
   window.addEventListener("keydown", handleUndoKeys);
