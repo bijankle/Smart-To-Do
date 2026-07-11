@@ -46,6 +46,8 @@ Product decisions locked in:
 - **No due-date UI.** The relative-date engine from Phase 1 remains in the codebase but is off by default; capture text is classified whole.
 - **Pill-bar navigation.** The UI is a row of Blurprint role-pills at the top — `All`, plus one pill per user bucket (and Inbox for untagged tasks) — filtering a single list below.
 - **Training only on explicit signals.** The classifier learns when a task is captured into, or moved to, a bucket by the user — never from its own predictions. A background pseudo-class keeps unfamiliar text in the Inbox instead of force-filing it.
+- **Built-in common sense via a seed lexicon** (`src/engine/lexicon.ts`). Buckets whose names match a known concept (groceries, hardware, work, health, finance, home, travel, car, pets, errands — by name or alias like "food"/"tools") are pre-trained with that concept's vocabulary, so "celery and onions" files into a brand-new `groceries` bucket with zero training. Seeds are lightly weighted; user corrections dominate quickly.
+- **Conservative auto-creation.** A capture matching ≥2 distinct words of a concept with no corresponding bucket auto-creates it. One everyday word is never enough, and a bucket the user deleted is never resurrected.
 - Default classifier confidence threshold: `0.55` (below it → Inbox).
 
 Parsing-engine constants (dormant while the date UI is off): `"friday"`-style words resolve to the soonest occurrence (today included), `"next friday"` adds 7 days, weeks start Monday, dates serialize as local `YYYY-MM-DD`.

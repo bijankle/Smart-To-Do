@@ -95,16 +95,19 @@ function renderPills(): void {
     input.maxLength = 24;
     add.replaceWith(input);
     input.focus();
-    const commit = () => {
+    let settled = false; // Enter also fires blur once we re-render — commit only once
+    const finish = (create: boolean) => {
+      if (settled) return;
+      settled = true;
       const name = input.value.trim();
-      if (name) repo.createBucket(name);
+      if (create && name) repo.createBucket(name);
       render();
     };
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") commit();
-      if (e.key === "Escape") render();
+      if (e.key === "Enter") finish(true);
+      if (e.key === "Escape") finish(false);
     });
-    input.addEventListener("blur", commit);
+    input.addEventListener("blur", () => finish(true));
   });
   nav.append(add);
 }

@@ -34,6 +34,8 @@ export interface BucketRecord {
   createdAt: string;
   modifiedAt: string;
   deletedAt: string | null;
+  /** True once the bucket has been pre-trained from the seed lexicon. */
+  seeded?: boolean;
 }
 
 export interface StoreDoc {

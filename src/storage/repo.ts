@@ -11,7 +11,9 @@
  *  - Persistence after every mutation through the injected adapter.
  */
 
-import { classify, ensureBucket, train, untrain } from "../engine/classify.js";
+import { classify, ensureBucket, seed, train, untrain } from "../engine/classify.js";
+import { conceptForBucketName, matchConcept, type Concept } from "../engine/lexicon.js";
+import { tokenize } from "../engine/tokenize.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD } from "../engine/parse.js";
 import {
   createDoc,
@@ -51,7 +53,31 @@ export class Repository {
   static async open(persistence: Persistence, options: RepositoryOptions = {}): Promise<Repository> {
     const raw = await persistence.load();
     const doc = raw ? deserializeDoc(raw) : createDoc(options.now?.() ?? new Date());
-    return new Repository(doc, persistence, options);
+    const repo = new Repository(doc, persistence, options);
+    repo.seedUnseededBuckets();
+    return repo;
+  }
+
+  /**
+   * Pre-train any live bucket whose name matches a seed-lexicon concept and
+   * hasn't been seeded yet. Runs on every open, so buckets created before
+   * the lexicon existed (or on another device) pick up their seeds too.
+   */
+  private seedUnseededBuckets(): void {
+    let changed = false;
+    for (const bucket of Object.values(this.doc.buckets)) {
+      if (bucket.deletedAt !== null || bucket.seeded) continue;
+      const concept = conceptForBucketName(bucket.name);
+      if (!concept) continue;
+      seed(this.doc.model, bucket.name, concept.vocabulary);
+      bucket.seeded = true;
+      bucket.modifiedAt = this.now().toISOString();
+      changed = true;
+    }
+    if (changed) {
+      this.doc.modelModifiedAt = this.now().toISOString();
+      this.scheduleSave();
+    }
   }
 
   // ---- tasks -------------------------------------------------------------
@@ -77,6 +103,8 @@ export class Repository {
       const suggestion = classify(this.doc.model, trimmed);
       if (suggestion && suggestion.confidence >= this.threshold && this.isLiveBucket(suggestion.bucket)) {
         assigned = suggestion.bucket;
+      } else {
+        assigned = this.assignByLexicon(trimmed);
       }
     }
 
@@ -158,6 +186,36 @@ export class Repository {
     this.touch(task);
   }
 
+  /**
+   * Fallback when the statistical classifier is unsure: if the text clearly
+   * matches a seed-lexicon concept (≥2 distinct vocabulary words), file it
+   * into the matching existing bucket — or auto-create that bucket, unless
+   * the user previously deleted one for the same concept (deletion is a
+   * choice we respect; we never resurrect it).
+   */
+  private assignByLexicon(text: string): string | null {
+    const match = matchConcept(tokenize(text));
+    if (!match) return null;
+
+    const existing = this.liveBucketForConcept(match.concept);
+    if (existing) return existing;
+
+    for (const bucket of Object.values(this.doc.buckets)) {
+      if (bucket.deletedAt !== null && conceptForBucketName(bucket.name) === match.concept) {
+        return null;
+      }
+    }
+    this.createBucket(match.concept.name);
+    return match.concept.name;
+  }
+
+  private liveBucketForConcept(concept: Concept): string | null {
+    for (const name of this.listBuckets()) {
+      if (conceptForBucketName(name) === concept) return name;
+    }
+    return null;
+  }
+
   // ---- manual ordering ---------------------------------------------------
 
   /** "This is important" — the user's replacement for priority tags. */
@@ -192,13 +250,22 @@ export class Repository {
     const ts = this.now().toISOString();
     const existing = this.doc.buckets[trimmed];
     if (existing && existing.deletedAt === null) return;
-    this.doc.buckets[trimmed] = {
+    const record = {
       name: trimmed,
       createdAt: existing?.createdAt ?? ts,
       modifiedAt: ts,
       deletedAt: null,
+      seeded: existing?.seeded ?? false,
     };
+    this.doc.buckets[trimmed] = record;
     ensureBucket(this.doc.model, trimmed);
+
+    const concept = conceptForBucketName(trimmed);
+    if (concept && !record.seeded) {
+      seed(this.doc.model, trimmed, concept.vocabulary);
+      record.seeded = true;
+      this.doc.modelModifiedAt = ts;
+    }
     this.scheduleSave();
   }
 
