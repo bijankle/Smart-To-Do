@@ -30,6 +30,9 @@ interface RawConcept {
   name: string;
   aliases: string;
   vocabulary: string;
+  /** Alias words that must NOT double as capture vocabulary ("book" is a
+   * verb in "book a dentist appointment"). */
+  vocabularyExcludes?: string;
 }
 
 /**
@@ -89,10 +92,29 @@ const RAW: RawConcept[] = [
       "shirt tshirt tee top pants jeans chino shorts trackie trackies tracksuit jacket puffer hoodie sweater jumper coat sock jocks undies underwear boxer brief bra dress skirt suit tie belt shoe sneaker runner running boot sandal thong scarf glove beanie hat cap pyjama legging singlet thermal blazer cardigan trouser polo swimsuit swimmer trunks activewear uniform vest denim flannel linen raincoat slipper heel loafer bikini blouse camisole fleece gown robe lingerie nightie nightwear tights sweatshirt slacks poncho shawl pashmina sarong waistcoat overalls dungaree cufflink knickers trainer stocking swim swimming hoody sunglasses sunnies corset kaftan romper nightgown swimwear underpants undershirt underclothes cargo tankini kilt necktie bonds champion adidas nike puma levis levi asics converse vans crocs ugg uggs",
   },
   {
+    name: "music",
+    aliases: "music songs song playlists playlist spotify",
+    vocabulary:
+      "listen song album playlist track single artist band remix acoustic concert gig tune banger mixtape ep lyric dj cover podcast spotify soundcloud shazam vinyl rock jazz blues rap hiphop edm techno classical opera kpop pop indie metal folk reggae soul funk disco punk beyonce drake rihanna eminem coldplay radiohead beatles abba adele kanye weeknd sza kendrick lamar tupac metallica nirvana acdc oasis gorillaz flume skrillex impala lorde sia bjork hozier billie eilish dua lipa doja bruno",
+  },
+  {
+    name: "films",
+    aliases: "films film movies movie cinema watchlist tv shows",
+    vocabulary:
+      "watch movie film cinema hoyts trailer netflix binge stream streaming disney hbo imax documentary doco sequel prequel marvel pixar ghibli anime thriller horror romcom scifi comedy drama blockbuster oscar oscars director premiere rewatch flick biopic",
+  },
+  {
+    name: "books",
+    aliases: "books book reading library",
+    vocabularyExcludes: "book books",
+    vocabulary:
+      "read reading novel author paperback hardcover ebook audiobook audible kindle library borrow goodreads memoir biography autobiography fiction nonfiction fantasy mystery romance thriller trilogy manga comic textbook poetry anthology bestseller bookstore dymocks kobo",
+  },
+  {
     name: "computer",
     aliases: "computer computers pc digital online desk",
     vocabulary:
-      "email install uninstall download upload update upgrade backup restore sync scan print pdf file folder rename organize password login account website browser bookmark software program app spreadsheet document slide photo video edit export import convert transfer migrate format reset configure troubleshoot virus antivirus malware driver firmware wifi vpn cloud server domain unsubscribe register signup cancel subscription calendar invite zoom code script database render compress unzip archive digitize",
+      "email install uninstall google search browse research facebook instagram tiktok youtube reddit linkedin resume cv application apply form portal mygov centrelink ato tax etax print organise automate download upload update upgrade backup restore sync scan print pdf file folder rename organize password login account website browser bookmark software program app spreadsheet document slide photo video edit export import convert transfer migrate format reset configure troubleshoot virus antivirus malware driver firmware wifi vpn cloud server domain unsubscribe register signup cancel subscription calendar invite zoom code script database render compress unzip archive digitize",
   },
   {
     name: "work",
@@ -101,12 +123,16 @@ const RAW: RawConcept[] = [
       "meeting email report presentation deck slide client customer project deadline invoice proposal contract review standup sprint retro ticket budget spreadsheet document memo boss colleague team manager interview hire resume agenda minute conference zoom slack demo launch release roadmap stakeholder quarterly performance timesheet payroll onboarding training workshop",
   },
   {
-    name: "health",
-    aliases: "health fitness gym medical wellness chemist pharmacy priceline",
+    name: "chemist",
+    aliases: "chemist pharmacy priceline",
     vocabulary:
-      `gym workout exercise run jog yoga pilate stretch cardio weight lift squat deadlift doctor dentist optometrist appointment checkup assessment screening scan referral specialist surgery prescription medicine pill supplement therapy therapist physio massage diet calorie protein sleep meditation hospital clinic vaccine blood test xray mri allergy flu injury recovery ` +
-      // Chemist-shelf brands and products:
-      `codral telfast zyrtec claratyne gaviscon mylanta imodium hydralyte voltaren nicorette strepsils difflam vicks sudafed demazin otrivin canesten betadine elastoplast blackmores swisse ostelin cenovis qv cetaphil sukin neutrogena bepanthen sudocrem straightener curler curling hairdryer blowdryer antihistamine hayfever ventolin melatonin magnesium probiotic collagen retinol serum facial cleanser eye drop lens solution contact thermometer lozenge throat cough tablet capsule ointment ${PERSONAL_CARE}`,
+      `prescription medicine pill supplement tablet capsule ointment thermometer pregnancy test protein codral telfast zyrtec claratyne gaviscon mylanta imodium hydralyte voltaren nicorette strepsils difflam vicks sudafed demazin otrivin canesten betadine elastoplast blackmores swisse ostelin cenovis qv cetaphil sukin neutrogena bepanthen sudocrem straightener curler curling hairdryer blowdryer antihistamine hayfever ventolin melatonin magnesium probiotic collagen retinol serum facial cleanser eye drop lens solution contact lozenge throat cough ${PERSONAL_CARE}`,
+  },
+  {
+    name: "health",
+    aliases: "health medical doctor fitness wellness appointments",
+    vocabulary:
+      "gym workout exercise run jog yoga pilate stretch cardio weight lift squat deadlift doctor dentist gp optometrist physio physiotherapist chiro chiropractor osteo podiatrist dermatologist cardiologist psychologist psychiatrist counsellor counselling therapist therapy dietitian specialist appointment checkup consult consultation assessment screening scan xray mri ultrasound pathology blood bloods referral vaccination vaccine booster jab flu surgery operation procedure hospital clinic emergency medicare bulkbill prescription diet sleep meditation mindfulness allergy injury recovery rehab dental filling crown rootcanal orthodontist braces skin mole biopsy hearing audiology dietician nutritionist",
   },
   {
     name: "finance",
@@ -152,12 +178,15 @@ function stemWords(words: string): string[] {
 
 export const CONCEPTS: Concept[] = RAW.map((raw) => {
   const aliases = stemWords(raw.aliases);
+  const excludes = new Set(stemWords(raw.vocabularyExcludes ?? ""));
   return {
     name: raw.name,
     aliases: new Set(aliases),
     // Alias words double as vocabulary so "bunnings run" or "medical
     // assessment" hit their concept even without a specific item word.
-    vocabulary: [...new Set([...stemWords(raw.vocabulary), ...aliases])],
+    vocabulary: [...new Set([...stemWords(raw.vocabulary), ...aliases])].filter(
+      (w) => !excludes.has(w),
+    ),
   };
 });
 

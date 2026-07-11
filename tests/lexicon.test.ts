@@ -52,7 +52,7 @@ describe("Seed lexicon", () => {
     assert.equal(conceptForBucketName("jbhifi")?.name, "electronics");
     assert.equal(conceptForBucketName("Woolworths")?.name, "groceries");
     assert.equal(conceptForBucketName("Coles")?.name, "groceries");
-    assert.equal(conceptForBucketName("Chemist Warehouse")?.name, "health");
+    assert.equal(conceptForBucketName("Chemist Warehouse")?.name, "chemist");
     assert.equal(conceptForBucketName("Officeworks")?.name, "stationery");
     assert.equal(conceptForBucketName("Ikea")?.name, "furniture");
     assert.equal(conceptForBucketName("Kmart")?.name, "homewares");
@@ -61,8 +61,8 @@ describe("Seed lexicon", () => {
   });
 
   it("multi-store products tag into every store that sells them", async () => {
-    assert.deepEqual(names(matchConcepts(tokenize("condoms"))), ["groceries", "health"]);
-    assert.deepEqual(names(matchConcepts(tokenize("bandaids and lube"))), ["groceries", "health"]);
+    assert.deepEqual(names(matchConcepts(tokenize("condoms"))), ["chemist", "groceries"]);
+    assert.deepEqual(names(matchConcepts(tokenize("bandaids and lube"))), ["chemist", "groceries"]);
 
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("Coles");
@@ -121,12 +121,29 @@ describe("Seed lexicon", () => {
     assert.deepEqual(repo.addTask("stapler and highlighters").buckets, ["Officeworks"]);
   });
 
+  it("covers the life categories: medical, computer, music, films, books", async () => {
+    assert.equal(conceptForBucketName("Music")?.name, "music");
+    assert.equal(conceptForBucketName("Films")?.name, "films");
+    assert.equal(conceptForBucketName("Books")?.name, "books");
+    assert.equal(conceptForBucketName("Computer")?.name, "computer");
+
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    for (const b of ["Medical", "Computer", "Music", "Films", "Books"]) repo.createBucket(b);
+    assert.deepEqual(repo.addTask("book a dentist appointment").buckets, ["Medical"]);
+    assert.deepEqual(repo.addTask("physio referral for my knee").buckets, ["Medical"]);
+    assert.deepEqual(repo.addTask("do my tax return on mygov").buckets, ["Computer"]);
+    assert.deepEqual(repo.addTask("backup photos and update drivers").buckets, ["Computer"]);
+    assert.deepEqual(repo.addTask("listen to the new flume album").buckets, ["Music"]);
+    assert.deepEqual(repo.addTask("watch that new marvel movie").buckets, ["Films"]);
+    assert.deepEqual(repo.addTask("read the new murakami novel").buckets, ["Books"]);
+  });
+
   it("matches a decisive single word ('laptop')", () => {
     assert.deepEqual(names(matchConcepts(tokenize("laptop"))), ["electronics"]);
   });
 
   it("stays quiet on incidental single words in longer text", () => {
-    assert.deepEqual(matchConcepts(tokenize("watch the onion movie trailer")), []);
+    assert.deepEqual(matchConcepts(tokenize("onion joke for the wedding speech")), []);
     assert.deepEqual(matchConcepts(tokenize("celery something unrelated")), []);
     assert.deepEqual(matchConcepts(tokenize("random musings about clouds")), []);
   });
@@ -289,7 +306,7 @@ describe("Repository — tags only ever target existing buckets", () => {
   it("ignores incidental single words in longer text", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("groceries");
-    const task = repo.addTask("watch the onion movie trailer");
+    const task = repo.addTask("onion joke for the wedding speech");
     assert.deepEqual(task.buckets, []);
   });
 

@@ -20,6 +20,7 @@ import { Repository, type TaskFilter } from "../storage/repo.js";
 import { WebStoragePersistence } from "../storage/persistence.js";
 import type { TaskRecord } from "../storage/doc.js";
 import { DriveSync } from "../sync/drive.js";
+import { lookupMediaConcepts } from "../sync/webcheck.js";
 
 let repo: Repository;
 let filter: TaskFilter = "all";
@@ -35,7 +36,8 @@ let graceTimer: number | undefined;
  * Applied once (recorded in the synced document): creates these pills and
  * folds any generic starter buckets into them.
  */
-const MY_STORES = [
+const MY_PILLS = [
+  // Stores
   "Coles",
   "Bunnings",
   "Chemist Warehouse",
@@ -44,6 +46,12 @@ const MY_STORES = [
   "Ikea",
   "Kmart",
   "Uniqlo",
+  // Life categories
+  "Medical",
+  "Computer",
+  "Music",
+  "Films",
+  "Books",
 ];
 const GENERIC_REMAP: Record<string, string> = {
   groceries: "Coles",
@@ -52,8 +60,6 @@ const GENERIC_REMAP: Record<string, string> = {
   tools: "Bunnings",
   electronics: "JB Hi-Fi",
   tech: "JB Hi-Fi",
-  health: "Chemist Warehouse",
-  medical: "Chemist Warehouse",
   clothing: "Uniqlo",
 };
 
@@ -92,6 +98,26 @@ function submitCapture(raw: string): void {
   }
   undoStack.push({ text: raw, taskId: task.id });
   render();
+  void webCheckUntagged();
+}
+
+/**
+ * Background reference check: untagged, untouched tasks get looked up in the
+ * iTunes catalogue (music/films/books) and tagged if they're a known title.
+ */
+const webChecked = new Set<string>();
+async function webCheckUntagged(): Promise<void> {
+  if (!navigator.onLine) return;
+  const candidates = repo
+    .listTasks("all")
+    .filter((t) => t.buckets.length === 0 && !t.manualTags && !webChecked.has(t.id))
+    .slice(0, 5);
+  for (const task of candidates) {
+    webChecked.add(task.id); // one lookup per task per session
+    const concepts = await lookupMediaConcepts(task.title);
+    const buckets = [...new Set(concepts.flatMap((c) => repo.bucketsForConceptName(c)))];
+    if (buckets.length > 0 && repo.setSuggestedTags(task.id, buckets)) render();
+  }
 }
 
 function handleCapture(event: SubmitEvent): void {
@@ -559,8 +585,9 @@ function render(): void {
 
 async function main(): Promise<void> {
   repo = await Repository.open(new WebStoragePersistence(window.localStorage));
-  repo.applyStoreSetup(MY_STORES, GENERIC_REMAP);
+  repo.applyStoreSetup(MY_PILLS, GENERIC_REMAP);
   repo.retagUntagged();
+  void webCheckUntagged();
   $("#capture").addEventListener("submit", handleCapture as EventListener);
   window.addEventListener("keydown", handleUndoKeys);
   initSyncControls();
