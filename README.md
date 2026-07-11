@@ -30,7 +30,7 @@ Every layer below the UI is plain ESM TypeScript with **zero runtime dependencie
 | `src/engine/dates.ts` | Relative-date extraction (`tomorrow`, `next friday`, `in 3 days`, `eow`, `eom`, …) resolved against an explicit `now` for determinism. |
 | `src/engine/tokenize.ts` | Shared tokenizer (lowercase, stopword/number filtering). |
 | `src/engine/classify.ts` | Naive Bayes model: `train` / `untrain` / `classify`, JSON-serializable so the model syncs with the tasks. |
-| `src/engine/parse.ts` | `parseTask(text)` → `{ title, due, bucket, confidence }`; low-confidence suggestions fall back to the Inbox. |
+| `src/engine/parse.ts` | `parseTask(text)` → `{ title, due, bucket, confidence }`; low-confidence suggestions are left untagged. |
 
 ### Phase 2 — Storage & Training Store (done)
 
@@ -44,11 +44,14 @@ Product decisions locked in:
 
 - **No priority tags.** Importance is expressed by position: new tasks enter at the top, and `moveToTop`/drag-reorder are first-class operations persisted in the task's `order` field.
 - **No due-date UI.** The relative-date engine from Phase 1 remains in the codebase but is off by default; capture text is classified whole.
-- **Pill-bar navigation.** The UI is a row of Blurprint role-pills at the top — `All`, plus one pill per user bucket (and Inbox for untagged tasks) — filtering a single list below.
-- **Training only on explicit signals.** The classifier learns when a task is captured into, or moved to, a bucket by the user — never from its own predictions. A background pseudo-class keeps unfamiliar text in the Inbox instead of force-filing it.
-- **Built-in common sense via a seed lexicon** (`src/engine/lexicon.ts`). Buckets whose names match a known concept (groceries, hardware, electronics, computer, work, health, finance, home, travel, car, pets, errands — by name or alias like "food"/"tools"/"tech"/"medical") are pre-trained with that concept's vocabulary, so "celery and onions" files into a brand-new `groceries` bucket with zero training. Seeds are lightly weighted; user corrections dominate quickly.
-- **Conservative auto-creation.** A capture matching ≥2 distinct words of a concept with no corresponding bucket auto-creates it. One everyday word is never enough, and a bucket the user deleted is never resurrected.
-- Default classifier confidence threshold: `0.55` (below it → Inbox).
+- **Buckets are stores.** The app's purpose: know what you need at the store you're standing in. Buckets can be named after real stores — the lexicon knows retail aliases (Bunnings/Mitre 10 → hardware, JB Hi-Fi/Officeworks → electronics, Coles/Woolworths/Aldi → groceries, Ikea/Kmart → home, chemist → health, …), so "screws and paint" files straight into your `Bunnings` list.
+- **Multi-bucket membership, never splitting.** "celery and a drill bit" is ONE task tagged into both groceries and hardware; completing it anywhere completes it everywhere. A multi-store match beats the classifier's single-store guess.
+- **Pill-bar navigation.** `All` plus one pill per bucket. Untagged tasks appear in All only — there is no Inbox.
+- **Training only on explicit signals.** The classifier learns when the user captures with a #tag or toggles a bucket on a task — never from its own predictions. Coverage guards keep incidental words ("watch the onion movie trailer") from filing anywhere.
+- **Built-in common sense via a seed lexicon** (`src/engine/lexicon.ts`). Buckets whose names match a concept (by name, alias, or store name) are pre-trained with that concept's vocabulary. Seeds are lightly weighted; user corrections dominate quickly.
+- **No auto-created tags.** Captures only file into buckets the user already has.
+- **Capture undo/redo.** Cmd+Z removes the last capture and restores its text into the input for correction; Cmd+Y re-captures. Titles are click-to-edit, and fixing an untagged task's typo re-runs auto-tagging.
+- Default classifier confidence threshold: `0.55`.
 
 Parsing-engine constants (dormant while the date UI is off): `"friday"`-style words resolve to the soonest occurrence (today included), `"next friday"` adds 7 days, weeks start Monday, dates serialize as local `YYYY-MM-DD`.
 
@@ -98,7 +101,7 @@ Try it out:
 
 - Type `buy milk #groceries` — the `#tag` files the task *and* teaches the classifier (new tags are created automatically).
 - After a few tagged examples, type `buy eggs` with no tag — it auto-files into `groceries`.
-- Tasks the classifier isn't confident about land in the **Inbox** pill; click a task's tag chip to move it, which trains the model.
+- Tasks the classifier isn't confident about stay untagged in **All**; use a row's + button or tag chips to file them, which trains the model.
 - The `↑` button moves a task to the top — importance is position, not priority tags.
 
 ## Development
