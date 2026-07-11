@@ -16,9 +16,32 @@
       <div class="app-logo">S</div>
       <div class="app-titles">
         <span class="app-name">Smart To-Do</span>
-        <span class="app-sub">learns where your tasks go</span>
+        <span class="app-sub" id="sync-indicator">local only</span>
+      </div>
+      <div class="header-actions">
+        <button type="button" id="sync-btn" class="btn-ghost" hidden>Sync</button>
+        <button type="button" id="settings-btn" class="icon-btn" title="Sync settings">⚙</button>
       </div>
     </header>
+
+    <section id="settings" class="settings" hidden>
+      <div class="settings-title">Google Drive sync</div>
+      <p class="settings-hint">
+        Free, uses your own Google account. One-time setup: create an OAuth Client ID
+        (see the README for the 5-minute walkthrough), paste it below, and press Connect.
+        Repeat once per device — your list and its learned categories follow you.
+      </p>
+      <label class="settings-label">
+        <span>OAuth Client ID</span>
+        <input id="client-id" class="settings-input" type="text"
+               placeholder="1234567890-xxxxxxxx.apps.googleusercontent.com" />
+      </label>
+      <div class="settings-row">
+        <button type="button" id="connect-btn" class="btn-primary btn-small">Save &amp; connect</button>
+        <button type="button" id="disconnect-btn" class="btn-ghost" hidden>Disconnect</button>
+        <span id="sync-status" class="sync-status"></span>
+      </div>
+    </section>
 
     <form id="capture" class="capture" autocomplete="off">
       <input id="capture-input" class="capture-input" type="text"

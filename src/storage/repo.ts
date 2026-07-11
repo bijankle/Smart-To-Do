@@ -99,6 +99,7 @@ export class Repository {
       train(this.doc.model, bucket, trimmed);
       this.doc.modelModifiedAt = ts;
       trainedBucket = bucket;
+      this.promoteBucket(bucket);
     } else {
       const suggestion = classify(this.doc.model, trimmed);
       if (suggestion && suggestion.confidence >= this.threshold && this.isLiveBucket(suggestion.bucket)) {
@@ -113,6 +114,7 @@ export class Repository {
       title: trimmed,
       bucket: assigned,
       done: false,
+      completedAt: null,
       order: this.topOrder(),
       createdAt: ts,
       modifiedAt: ts,
@@ -124,14 +126,26 @@ export class Repository {
     return task;
   }
 
-  /** Live (non-deleted) tasks for a pill filter, sorted top-first. */
+  /** Live, OPEN tasks for a pill filter, sorted top-first. Completed tasks vanish from here. */
   listTasks(filter: TaskFilter = "all"): TaskRecord[] {
     return Object.values(this.doc.tasks)
-      .filter((t) => t.deletedAt === null)
-      .filter((t) =>
-        filter === "all" ? true : filter === "inbox" ? t.bucket === null : t.bucket === filter,
-      )
+      .filter((t) => t.deletedAt === null && !t.done)
+      .filter((t) => this.matchesFilter(t, filter))
       .sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
+  }
+
+  /** Live, completed tasks for a pill filter, most recently completed first. */
+  listCompleted(filter: TaskFilter = "all"): TaskRecord[] {
+    return Object.values(this.doc.tasks)
+      .filter((t) => t.deletedAt === null && t.done)
+      .filter((t) => this.matchesFilter(t, filter))
+      .sort((a, b) =>
+        (b.completedAt ?? b.modifiedAt).localeCompare(a.completedAt ?? a.modifiedAt),
+      );
+  }
+
+  private matchesFilter(task: TaskRecord, filter: TaskFilter): boolean {
+    return filter === "all" ? true : filter === "inbox" ? task.bucket === null : task.bucket === filter;
   }
 
   getTask(id: string): TaskRecord | null {
@@ -142,6 +156,7 @@ export class Repository {
   setDone(id: string, done: boolean): void {
     const task = this.requireTask(id);
     task.done = done;
+    task.completedAt = done ? this.now().toISOString() : null;
     this.touch(task);
   }
 
@@ -180,6 +195,7 @@ export class Repository {
       this.requireBucket(bucket);
       train(this.doc.model, bucket, task.title);
       task.trainedBucket = bucket;
+      this.promoteBucket(bucket);
     }
     this.doc.modelModifiedAt = this.now().toISOString();
     task.bucket = bucket;
@@ -205,7 +221,7 @@ export class Repository {
         return null;
       }
     }
-    this.createBucket(match.concept.name);
+    this.createBucket(match.concept.name, "auto");
     return match.concept.name;
   }
 
@@ -244,7 +260,7 @@ export class Repository {
 
   // ---- buckets -----------------------------------------------------------
 
-  createBucket(name: string): void {
+  createBucket(name: string, origin: "user" | "auto" = "user"): void {
     const trimmed = name.trim();
     if (!trimmed) throw new Error("Bucket name cannot be empty");
     const ts = this.now().toISOString();
@@ -256,6 +272,7 @@ export class Repository {
       modifiedAt: ts,
       deletedAt: null,
       seeded: existing?.seeded ?? false,
+      origin,
     };
     this.doc.buckets[trimmed] = record;
     ensureBucket(this.doc.model, trimmed);
@@ -269,12 +286,33 @@ export class Repository {
     this.scheduleSave();
   }
 
-  /** Bucket names for the pill bar, in creation order. */
+  /**
+   * Bucket names for the pill bar: user-created/adopted buckets first (in
+   * creation order), auto-generated ones after.
+   */
   listBuckets(): string[] {
+    return this.listBucketDetails().map((b) => b.name);
+  }
+
+  /** Pill-bar detail: name + whether the bucket is still auto-generated. */
+  listBucketDetails(): Array<{ name: string; auto: boolean }> {
     return Object.values(this.doc.buckets)
       .filter((b) => b.deletedAt === null)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .map((b) => b.name);
+      .sort((a, b) => {
+        const autoA = a.origin === "auto" ? 1 : 0;
+        const autoB = b.origin === "auto" ? 1 : 0;
+        return autoA - autoB || a.createdAt.localeCompare(b.createdAt);
+      })
+      .map((b) => ({ name: b.name, auto: b.origin === "auto" }));
+  }
+
+  /** An auto bucket the user files into becomes theirs — visually and in ordering. */
+  private promoteBucket(name: string): void {
+    const bucket = this.doc.buckets[name];
+    if (bucket && bucket.deletedAt === null && bucket.origin === "auto") {
+      bucket.origin = "user";
+      bucket.modifiedAt = this.now().toISOString();
+    }
   }
 
   /** Tombstone the bucket; its live tasks fall back to the Inbox. */

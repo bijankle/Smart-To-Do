@@ -1,25 +1,33 @@
 /**
- * Phase 3 — Blurprint UI shell.
+ * Phase 3/4 — Blurprint UI shell + sync controls.
  *
  * Vanilla DOM, no framework: state lives in the Repository, and every
- * mutation triggers a full re-render of the pill bar + list (cheap at this
+ * mutation triggers a re-render of the pill bar + list (cheap at this
  * scale). All user text goes through textContent, never innerHTML.
  *
  * Interactions:
  *  - Capture box adds to the top; a #tag anywhere files AND trains the bucket
- *    (creating it if new). Without a tag the classifier suggests one, or the
- *    task stays in the Inbox.
- *  - Pill bar filters: All / Inbox / one pill per bucket / "+" to add one.
- *  - Row actions: check off, re-tag (the correction that trains the model),
- *    move to top (importance without priority tags), delete.
+ *    (creating it if new). Without a tag the classifier suggests one, the seed
+ *    lexicon fills gaps (auto-creating clear-cut buckets), or the task stays
+ *    in the Inbox.
+ *  - Pill bar: All / Inbox / user buckets / auto buckets (dashed = auto) / +tag.
+ *  - Completed tasks vanish from the list; a footer toggle reveals them,
+ *    most recently completed first.
+ *  - Google Drive sync (optional): configure once in ⚙ settings.
  */
 
 import { Repository, type TaskFilter } from "../storage/repo.js";
 import { WebStoragePersistence } from "../storage/persistence.js";
 import type { TaskRecord } from "../storage/doc.js";
+import { DriveSync } from "../sync/drive.js";
 
 let repo: Repository;
 let filter: TaskFilter = "all";
+let showCompleted = false;
+let drive: DriveSync | null = null;
+
+const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
+const LAST_SYNC_KEY = "smart-to-do/last-sync";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -50,10 +58,20 @@ function handleCapture(event: SubmitEvent): void {
 
 // ---- pill bar --------------------------------------------------------------
 
-function pill(label: string, count: number, active: boolean, onClick: () => void): HTMLButtonElement {
+function pill(
+  label: string,
+  count: number,
+  options: { active: boolean; auto?: boolean },
+  onClick: () => void,
+): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = active ? "pill pill-active" : "pill";
+  button.className = "pill";
+  if (options.active) button.classList.add("pill-active");
+  if (options.auto) {
+    button.classList.add("pill-generated");
+    button.title = "Created automatically — file a task into it to keep it";
+  }
   const dot = document.createElement("span");
   dot.className = "pill-dot";
   const text = document.createElement("span");
@@ -73,14 +91,20 @@ function renderPills(): void {
   const nav = $("#pills");
   nav.replaceChildren();
 
-  const open = (t: TaskRecord) => !t.done;
   nav.append(
-    pill("All", repo.listTasks("all").filter(open).length, filter === "all", () => setFilter("all")),
-    pill("Inbox", repo.listTasks("inbox").filter(open).length, filter === "inbox", () => setFilter("inbox")),
+    pill("All", repo.listTasks("all").length, { active: filter === "all" }, () => setFilter("all")),
+    pill("Inbox", repo.listTasks("inbox").length, { active: filter === "inbox" }, () =>
+      setFilter("inbox"),
+    ),
   );
-  for (const bucket of repo.listBuckets()) {
+  for (const bucket of repo.listBucketDetails()) {
     nav.append(
-      pill(bucket, repo.listTasks(bucket).filter(open).length, filter === bucket, () => setFilter(bucket)),
+      pill(
+        bucket.name,
+        repo.listTasks(bucket.name).length,
+        { active: filter === bucket.name, auto: bucket.auto },
+        () => setFilter(bucket.name),
+      ),
     );
   }
 
@@ -160,14 +184,16 @@ function renderRow(task: TaskRecord): HTMLElement {
     openTagMenu(tag, task);
   });
 
+  row.append(check, body, tag);
+  if (!task.done) {
+    row.append(
+      iconButton("row-top", "↑", "Move to top", () => {
+        repo.moveToTop(task.id);
+        render();
+      }),
+    );
+  }
   row.append(
-    check,
-    body,
-    tag,
-    iconButton("row-top", "↑", "Move to top", () => {
-      repo.moveToTop(task.id);
-      render();
-    }),
     iconButton("row-delete", "×", "Delete", () => {
       repo.deleteTask(task.id);
       render();
@@ -213,9 +239,10 @@ function closeTagMenu(): void {
 function renderList(): void {
   const list = $("#list");
   list.replaceChildren();
-  const tasks = repo.listTasks(filter);
+  const open = repo.listTasks(filter);
+  const completed = showCompleted ? repo.listCompleted(filter) : [];
 
-  if (tasks.length === 0) {
+  if (open.length === 0 && completed.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty";
     empty.textContent =
@@ -227,23 +254,133 @@ function renderList(): void {
     list.append(empty);
     return;
   }
-  for (const task of tasks) list.append(renderRow(task));
+
+  for (const task of open) list.append(renderRow(task));
+
+  if (completed.length > 0) {
+    const divider = document.createElement("div");
+    divider.className = "list-divider";
+    divider.textContent = "Completed";
+    list.append(divider);
+    for (const task of completed) list.append(renderRow(task));
+  }
 }
 
 function renderFooter(): void {
   const footer = $("#footer");
   footer.replaceChildren();
-  const done = repo.listTasks(filter).filter((t) => t.done);
-  if (done.length === 0) return;
-  const clear = document.createElement("button");
-  clear.type = "button";
-  clear.className = "btn-ghost";
-  clear.textContent = `Clear ${done.length} completed`;
-  clear.addEventListener("click", () => {
-    for (const task of done) repo.deleteTask(task.id);
+  const completed = repo.listCompleted(filter);
+  if (completed.length === 0) {
+    showCompleted = false;
+    return;
+  }
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "btn-ghost";
+  toggle.textContent = showCompleted
+    ? "Hide completed"
+    : `Show ${completed.length} completed`;
+  toggle.addEventListener("click", () => {
+    showCompleted = !showCompleted;
     render();
   });
-  footer.append(clear);
+  footer.append(toggle);
+
+  if (showCompleted) {
+    const clear = document.createElement("button");
+    clear.type = "button";
+    clear.className = "btn-ghost btn-ghost-danger";
+    clear.textContent = "Clear completed";
+    clear.addEventListener("click", () => {
+      for (const task of completed) repo.deleteTask(task.id);
+      render();
+    });
+    footer.append(clear);
+  }
+}
+
+// ---- sync ------------------------------------------------------------------
+
+function setSyncStatus(text: string, isError = false): void {
+  const status = $("#sync-status");
+  status.textContent = text;
+  status.classList.toggle("sync-status-error", isError);
+}
+
+function renderSyncUi(): void {
+  const configured = Boolean(localStorage.getItem(CLIENT_ID_KEY));
+  $("#sync-btn").hidden = !configured;
+  $("#disconnect-btn").hidden = !configured;
+  const indicator = $("#sync-indicator");
+  if (!configured) {
+    indicator.textContent = "local only";
+  } else if (drive?.connected) {
+    const last = localStorage.getItem(LAST_SYNC_KEY);
+    indicator.textContent = last ? `synced ${new Date(last).toLocaleTimeString()}` : "connected";
+  } else {
+    indicator.textContent = "sync configured — press Sync";
+  }
+}
+
+async function doSync(interactive: boolean): Promise<void> {
+  if (!drive) return;
+  try {
+    if (!drive.connected) {
+      setSyncStatus("Connecting…");
+      const ok = await drive.connect(interactive);
+      if (!ok) {
+        setSyncStatus(interactive ? "Google sign-in was cancelled." : "", interactive);
+        renderSyncUi();
+        return;
+      }
+    }
+    setSyncStatus("Syncing…");
+    const result = await drive.sync(repo);
+    localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
+    setSyncStatus(result === "first-upload" ? "First upload complete ✓" : "Synced ✓");
+    render();
+  } catch (error) {
+    setSyncStatus(error instanceof Error ? error.message : "Sync failed", true);
+  }
+  renderSyncUi();
+}
+
+function initSyncControls(): void {
+  const saved = localStorage.getItem(CLIENT_ID_KEY);
+  if (saved) {
+    $<HTMLInputElement>("#client-id").value = saved;
+    drive = new DriveSync(saved);
+    // Silent reconnect + sync if the user authorized before.
+    void doSync(false);
+  }
+
+  $("#settings-btn").addEventListener("click", () => {
+    const panel = $("#settings");
+    panel.hidden = !panel.hidden;
+  });
+
+  $("#connect-btn").addEventListener("click", () => {
+    const clientId = $<HTMLInputElement>("#client-id").value.trim();
+    if (!clientId) {
+      setSyncStatus("Paste your OAuth Client ID first.", true);
+      return;
+    }
+    localStorage.setItem(CLIENT_ID_KEY, clientId);
+    drive = new DriveSync(clientId);
+    void doSync(true);
+  });
+
+  $("#disconnect-btn").addEventListener("click", () => {
+    localStorage.removeItem(CLIENT_ID_KEY);
+    localStorage.removeItem(LAST_SYNC_KEY);
+    drive = null;
+    setSyncStatus("Disconnected. Your data stays on this device.");
+    renderSyncUi();
+  });
+
+  $("#sync-btn").addEventListener("click", () => void doSync(true));
+  renderSyncUi();
 }
 
 // ---- boot ------------------------------------------------------------------
@@ -253,11 +390,13 @@ function render(): void {
   renderPills();
   renderList();
   renderFooter();
+  renderSyncUi();
 }
 
 async function main(): Promise<void> {
   repo = await Repository.open(new WebStoragePersistence(window.localStorage));
   $("#capture").addEventListener("submit", handleCapture as EventListener);
+  initSyncControls();
   render();
   $<HTMLInputElement>("#capture-input").focus();
 }

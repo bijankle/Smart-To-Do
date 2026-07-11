@@ -67,6 +67,106 @@ body {
   color: var(--text-muted);
 }
 
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: var(--control-height-small);
+  height: var(--control-height-small);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--bg-hover);
+}
+
+/* ---- settings panel ---- */
+
+.settings {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-card);
+}
+
+.settings-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.settings-hint {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0 0 14px;
+}
+
+.settings-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.settings-label span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.settings-input {
+  height: var(--control-height-small);
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--text);
+  outline: none;
+}
+
+.settings-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-focus-ring);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-small {
+  height: var(--control-height-small);
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.sync-status {
+  font-size: 13px;
+  color: var(--success-text);
+  font-weight: 600;
+}
+
+.sync-status-error {
+  color: var(--danger);
+}
+
 /* ---- capture ---- */
 
 .capture {
@@ -194,6 +294,20 @@ body {
 .pill-add {
   border-style: dashed;
   color: var(--text-muted);
+}
+
+/* Auto-generated bucket: dashed outline + hollow dot until the user adopts it. */
+.pill-generated {
+  border-style: dashed;
+}
+
+.pill-generated .pill-dot {
+  background: transparent;
+  border: 1.5px solid var(--gray-400);
+}
+
+.pill-generated.pill-active .pill-dot {
+  border-color: var(--accent);
 }
 
 .pill-input {
@@ -378,8 +492,28 @@ body {
   color: var(--text-muted);
 }
 
+.list-divider {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 14px 10px 6px;
+  border-top: 1px solid var(--gray-100);
+  margin-top: 6px;
+}
+
 .footer {
   display: flex;
   justify-content: center;
+  gap: 10px;
   padding-top: 14px;
+}
+
+.btn-ghost-danger {
+  color: var(--danger);
+}
+
+.btn-ghost-danger:hover {
+  background: var(--danger-tint);
 }

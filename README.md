@@ -11,7 +11,7 @@ A local, cross-platform smart to-do list. Tasks are categorized **entirely on-de
 
 ```
 ┌─────────────────────────────────────────────┐
-│ 4. Sync Adapter (cloud remote, pluggable)   │  Phase 4
+│ 4. Sync Adapter (Google Drive appData)      │  Phase 4  ✅
 ├─────────────────────────────────────────────┤
 │ 3. UI Shell (installable PWA, Blurprint UI) │  Phase 3  ✅
 ├─────────────────────────────────────────────┤
@@ -51,6 +51,24 @@ Product decisions locked in:
 - Default classifier confidence threshold: `0.55` (below it → Inbox).
 
 Parsing-engine constants (dormant while the date UI is off): `"friday"`-style words resolve to the soonest occurrence (today included), `"next friday"` adds 7 days, weeks start Monday, dates serialize as local `YYYY-MM-DD`.
+
+### Phase 3/4 additions
+
+- **Auto vs user buckets.** Auto-generated buckets render as dashed pills with a hollow dot and sort after user buckets; filing a task into one adopts it (solid pill, user ordering).
+- **Completed tasks vanish** from the list. A footer toggle reveals them (most recently completed first) alongside a "Clear completed" action.
+- **Google Drive sync** (`src/sync/drive.ts`): the whole store syncs as one JSON file in Drive's hidden `appDataFolder` (scope `drive.appdata` — the app can only see its own file, nothing else in Drive). Download → last-write-wins merge → upload; conflict-safe in any order.
+
+### Google Drive sync setup (one-time, free)
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and sign in.
+2. Create a project (name it anything, e.g. "Smart To-Do").
+3. **APIs & Services → Library** → search "Google Drive API" → **Enable**.
+4. **APIs & Services → OAuth consent screen**: choose **External**, fill in the app name and your email, and add your own Gmail address as a **test user**.
+5. **APIs & Services → Credentials → Create credentials → OAuth client ID**: application type **Web application**, and under **Authorized JavaScript origins** add `http://localhost:4173`.
+6. Copy the generated **Client ID** (ends in `.apps.googleusercontent.com`).
+7. In the app: click **⚙** → paste the Client ID → **Save & connect** → approve the Google popup.
+
+Repeat step 7 on each device (same Client ID). The Sync button pulls, merges, and pushes; the app also syncs silently on startup once authorized.
 
 ### UI theme (Phase 3 prep)
 

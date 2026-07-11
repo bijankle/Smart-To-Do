@@ -58,11 +58,42 @@ describe("Repository — tasks and ordering", () => {
     assert.ok(doc.tasks[task.id]!.deletedAt !== null);
   });
 
-  it("setDone toggles completion", async () => {
+  it("completed tasks vanish from listTasks and appear in listCompleted, recent-first", async () => {
     const { repo } = await freshRepo();
-    const task = repo.addTask("laundry");
-    repo.setDone(task.id, true);
-    assert.equal(repo.getTask(task.id)!.done, true);
+    const a = repo.addTask("first done");
+    const b = repo.addTask("second done");
+    repo.addTask("still open");
+    repo.setDone(a.id, true);
+    repo.setDone(b.id, true); // completed later than a
+
+    assert.deepEqual(repo.listTasks().map((t) => t.title), ["still open"]);
+    assert.deepEqual(repo.listCompleted().map((t) => t.title), ["second done", "first done"]);
+
+    // Un-completing puts it back in the open list.
+    repo.setDone(b.id, false);
+    assert.equal(repo.getTask(b.id)!.completedAt, null);
+    assert.ok(repo.listTasks().some((t) => t.id === b.id));
+  });
+});
+
+describe("Repository — bucket origins", () => {
+  it("orders user buckets before auto buckets in the pill bar", async () => {
+    const { repo } = await freshRepo();
+    repo.addTask("hammer and nails"); // auto-creates hardware first...
+    repo.createBucket("projects"); // ...but user buckets still sort first
+    assert.deepEqual(repo.listBucketDetails(), [
+      { name: "projects", auto: false },
+      { name: "hardware", auto: true },
+    ]);
+  });
+
+  it("promotes an auto bucket to user when the user files into it", async () => {
+    const { repo } = await freshRepo();
+    const task = repo.addTask("hammer and nails");
+    assert.equal(repo.listBucketDetails()[0]!.auto, true);
+    repo.setBucket(task.id, null);
+    repo.setBucket(task.id, "hardware"); // explicit user move = adoption
+    assert.deepEqual(repo.listBucketDetails(), [{ name: "hardware", auto: false }]);
   });
 });
 

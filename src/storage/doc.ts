@@ -17,6 +17,8 @@ export interface TaskRecord {
   /** Bucket name, or null = Inbox / untagged. */
   bucket: string | null;
   done: boolean;
+  /** When the task was checked off; completed lists sort most-recent-first. */
+  completedAt?: string | null;
   /** Manual sort position; lists render ascending, so smaller = nearer the top. */
   order: number;
   createdAt: string;
@@ -36,6 +38,13 @@ export interface BucketRecord {
   deletedAt: string | null;
   /** True once the bucket has been pre-trained from the seed lexicon. */
   seeded?: boolean;
+  /**
+   * "auto" = created by the lexicon matcher; "user" (or absent, for legacy
+   * records) = created or adopted by the user. Auto buckets render with a
+   * subtle visual difference and sort after user buckets; they promote to
+   * "user" the first time the user files a task into them.
+   */
+  origin?: "user" | "auto";
 }
 
 export interface StoreDoc {
