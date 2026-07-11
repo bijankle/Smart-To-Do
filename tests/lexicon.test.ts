@@ -24,6 +24,19 @@ describe("Seed lexicon", () => {
     assert.equal(conceptForBucketName("misc stuff"), null);
   });
 
+  it("covers the go-to-places categories: electronics and computer tasks", async () => {
+    assert.equal(conceptForBucketName("electronics")?.name, "electronics");
+    assert.equal(conceptForBucketName("Tech")?.name, "electronics");
+    assert.equal(conceptForBucketName("computer")?.name, "computer");
+    assert.equal(conceptForBucketName("Medical")?.name, "health");
+
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.createBucket("electronics");
+    repo.createBucket("computer");
+    assert.equal(repo.addTask("hdmi cable and a phone charger").bucket, "electronics");
+    assert.equal(repo.addTask("backup the photo folder and update drivers").bucket, "computer");
+  });
+
   it("matches text to a concept only with 2+ distinct vocabulary hits", () => {
     assert.equal(matchConcept(tokenize("i need celery and onions"))?.concept.name, "groceries");
     assert.equal(matchConcept(tokenize("hammer and nails from the store"))?.concept.name, "hardware");
