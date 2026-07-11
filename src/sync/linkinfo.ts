@@ -37,21 +37,39 @@ export function parseMediaLink(text: string): MediaLink | null {
     return { kind: "imdb", url: imdb[0], id: imdb[1]!, slugTitle: null, year: null };
   }
 
-  // Share-sheet text: the URL is a shortener, but the title is in the text.
   const anyUrl = new RegExp(URL_PATTERN).exec(text);
-  if (!anyUrl) return null;
-  const url = anyUrl[0];
+  const url = anyUrl ? anyUrl[0] : null;
   const textPart = text.replace(new RegExp(URL_PATTERN), " ").replace(/\s+/g, " ").trim();
 
-  const imdbShare = /^(.+?)\s*(?:\((\d{4})\))?\s*[-–—]\s*IMDb\b/i.exec(textPart);
-  if (imdbShare) {
-    return { kind: "imdb-share", url, id: null, slugTitle: imdbShare[1]!.trim(), year: imdbShare[2] ?? null };
+  // Signal-first: the mere presence of "IMDb" / "Goodreads" (in the text OR
+  // the URL) settles the category — a film is a film even if we can't parse a
+  // clean title. Title extraction below is a best-effort bonus.
+  const haystack = `${textPart} ${url ?? ""}`;
+  const isImdb = /\bimdb\b/i.test(haystack);
+  const isGoodreads = /\bgoodreads\b/i.test(haystack);
+  if (!isImdb && !isGoodreads) {
+    if (!url) return null;
+    return { kind: "link", url, id: null, slugTitle: textPart || null, year: null };
   }
-  const goodreadsShare = /^(.+?)\s*[-–—]?\s*(?:by\s+.+?\s*[-–—]\s*)?Goodreads\b/i.exec(textPart);
-  if (goodreadsShare && /goodreads/i.test(textPart)) {
-    return { kind: "goodreads-share", url, id: null, slugTitle: goodreadsShare[1]!.trim(), year: null };
+
+  const year = /\((\d{4})\)/.exec(textPart)?.[1] ?? null;
+  // Strip the trailing source tag, year, and connector words to recover the title.
+  const title =
+    textPart
+      .replace(/[\s(]*\d{4}[\s)]*/, " ")
+      .replace(/\s*[-–—|:]\s*(imdb|goodreads).*$/i, "")
+      .replace(/\b(imdb|goodreads)\b/gi, "")
+      .replace(/\s*[-–—|:]\s*/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\s+(on|via|at|from|see|check|watch)$/i, "")
+      .replace(/^(on|via|at|from|see|check|watch)\s+/i, "")
+      .trim() || null;
+
+  if (isImdb) {
+    return { kind: "imdb-share", url: url ?? "", id: null, slugTitle: title, year };
   }
-  return { kind: "link", url, id: null, slugTitle: textPart || null, year: null };
+  return { kind: "goodreads-share", url: url ?? "", id: null, slugTitle: title, year: null };
 }
 
 export function titleCase(text: string): string {

@@ -85,6 +85,25 @@ describe("Pasted media links", () => {
     assert.equal(generic?.slugTitle, "cool recipe");
   });
 
+  it("recognizes the source even when the title can't be parsed", () => {
+    // Bare IMDb link → Films, no title needed.
+    const bare = parseMediaLink("https://www.imdb.com/title/tt0133093/");
+    assert.equal(bare?.kind, "imdb");
+
+    // Odd share formatting still bins as a film off the word 'IMDb' alone.
+    const messy = parseMediaLink("check IMDb https://share.google/xyz");
+    assert.equal(messy?.kind, "imdb-share");
+
+    // The word 'imdb' with no URL at all is still a film.
+    const noUrl = parseMediaLink("Dune Part Two on imdb");
+    assert.equal(noUrl?.kind, "imdb-share");
+    assert.equal(noUrl?.slugTitle, "Dune Part Two");
+
+    // Goodreads shortener with reversed order.
+    const gr = parseMediaLink("https://share.google/abc via Goodreads");
+    assert.equal(gr?.kind, "goodreads-share");
+  });
+
   it("enriches a share-text film by title via the movie catalogue", async () => {
     const fakeFetch = (async () => ({
       ok: true,
