@@ -58,6 +58,8 @@ export interface StoreDoc {
   buckets: Record<string, BucketRecord>;
   model: ClassifierModel;
   modelModifiedAt: string;
+  /** Highest one-time setup migration applied (e.g. bespoke store pills). */
+  setupVersion?: number;
 }
 
 export function createDoc(now: Date = new Date()): StoreDoc {
@@ -99,6 +101,7 @@ export function mergeDocs(local: StoreDoc, remote: StoreDoc): StoreDoc {
     buckets,
     model: modelFromRemote ? remote.model : local.model,
     modelModifiedAt: modelFromRemote ? remote.modelModifiedAt : local.modelModifiedAt,
+    setupVersion: Math.max(local.setupVersion ?? 0, remote.setupVersion ?? 0),
   };
 }
 

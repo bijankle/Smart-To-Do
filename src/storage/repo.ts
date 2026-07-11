@@ -83,6 +83,46 @@ export class Repository {
     }
   }
 
+  /**
+   * One-time bespoke setup (recorded in the doc, so it runs once across ALL
+   * devices): create the user's store pills and fold any generic starter
+   * buckets into them — memberships and training move, then the generic
+   * bucket is deleted. Stores the user tombstoned are never resurrected.
+   */
+  applyStoreSetup(stores: string[], remap: Record<string, string>): boolean {
+    if ((this.doc.setupVersion ?? 0) >= 1) return false;
+
+    for (const store of stores) {
+      if (!this.doc.buckets[store]) this.createBucket(store);
+    }
+
+    const remapLower = new Map(Object.entries(remap).map(([k, v]) => [k.toLowerCase(), v]));
+    for (const bucket of Object.values(this.doc.buckets)) {
+      if (bucket.deletedAt !== null) continue;
+      const target = remapLower.get(bucket.name.toLowerCase());
+      if (!target || target === bucket.name || !this.isLiveBucket(target)) continue;
+
+      for (const task of Object.values(this.doc.tasks)) {
+        if (task.deletedAt !== null || !task.buckets.includes(bucket.name)) continue;
+        task.buckets = [...new Set(task.buckets.map((b) => (b === bucket.name ? target : b)))];
+        if (task.trainedBuckets.includes(bucket.name)) {
+          untrain(this.doc.model, bucket.name, task.title);
+          train(this.doc.model, target, task.title);
+          task.trainedBuckets = [
+            ...new Set(task.trainedBuckets.map((b) => (b === bucket.name ? target : b))),
+          ];
+          this.doc.modelModifiedAt = this.now().toISOString();
+        }
+        task.modifiedAt = this.now().toISOString();
+      }
+      this.deleteBucket(bucket.name);
+    }
+
+    this.doc.setupVersion = 1;
+    this.scheduleSave();
+    return true;
+  }
+
   // ---- tasks -------------------------------------------------------------
 
   /**
@@ -336,6 +376,13 @@ export class Repository {
     const ts = this.now().toISOString();
     bucket.deletedAt = ts;
     bucket.modifiedAt = ts;
+    // Purge its classifier stats too, so a dead bucket can't win suggestions.
+    const stats = this.doc.model.buckets[name];
+    if (stats) {
+      this.doc.model.totalDocs = Math.max(0, this.doc.model.totalDocs - stats.docCount);
+      delete this.doc.model.buckets[name];
+      this.doc.modelModifiedAt = ts;
+    }
     for (const task of Object.values(this.doc.tasks)) {
       if (task.deletedAt !== null || !task.buckets.includes(name)) continue;
       task.buckets = task.buckets.filter((b) => b !== name);

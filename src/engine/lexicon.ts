@@ -48,9 +48,27 @@ const RAW: RawConcept[] = [
   },
   {
     name: "electronics",
-    aliases: "electronics electronic tech gadgets gadget jb jbhifi officeworks bestbuy harvey",
+    aliases: "electronics electronic tech gadgets gadget jb jbhifi bestbuy harvey",
     vocabulary:
-      "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud speaker soundbar phone tablet camera webcam drone console controller router modem printer ink toner cartridge ssd harddrive drive ram memory gpu cpu processor motherboard case fan projector smartwatch fitbit kindle remote antenna surge protector powerbank sim stylus tripod microphone gopro chromecast roku firestick pen pencil notebook stapler staple envelope binder marker highlighter stationery laminate whiteboard",
+      "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud speaker soundbar phone tablet camera webcam drone console controller router modem printer ssd harddrive drive ram memory gpu cpu processor motherboard case fan projector smartwatch fitbit kindle remote antenna surge protector powerbank sim stylus tripod microphone gopro chromecast roku firestick playstation xbox nintendo",
+  },
+  {
+    name: "stationery",
+    aliases: "stationery officeworks office staples",
+    vocabulary:
+      "pen pencil notebook notepad paper stapler staple envelope binder marker highlighter sharpie eraser ruler scissors clipboard diary planner calculator label sticker card cardstock ink toner cartridge printer laminate laminator whiteboard folder divider paperclip pin tack glue tape shredder",
+  },
+  {
+    name: "furniture",
+    aliases: "furniture ikea flatpack",
+    vocabulary:
+      "couch sofa armchair recliner ottoman futon desk table chair stool bench shelf shelving bookcase bookshelf wardrobe dresser drawer cabinet cupboard mattress bed bedframe headboard nightstand bedside lamp rug curtain blind cushion mirror hook rail sideboard buffet hutch trundle daybed",
+  },
+  {
+    name: "homewares",
+    aliases: "homewares kmart target bigw",
+    vocabulary:
+      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle lego doll craft wrapping ribbon balloon party hamper mat doormat clock",
   },
   {
     name: "clothing",
@@ -84,7 +102,7 @@ const RAW: RawConcept[] = [
   },
   {
     name: "home",
-    aliases: "home house household chores cleaning ikea kmart",
+    aliases: "home house household chores cleaning",
     vocabulary:
       "clean cleaning vacuum mop dust laundry dish dishe trash garbage recycle recycling organize declutter tidy bed sheet towel iron fold closet garage attic basement lawn mow rake leaf snow shovel gutter window curtain blind furniture couch sofa repair fix leak faucet toilet shower drain plant water fridge freezer oven stove microwave dishwasher dryer washer smoke detector thermostat",
   },

@@ -162,6 +162,55 @@ describe("Repository — bucket origins (legacy auto buckets)", () => {
   });
 });
 
+describe("Repository — bespoke store setup", () => {
+  const STORES = [
+    "Coles", "Bunnings", "Chemist Warehouse", "JB Hi-Fi",
+    "Officeworks", "Ikea", "Kmart", "Uniqlo",
+  ];
+  const REMAP = { groceries: "Coles", hardware: "Bunnings", electronics: "JB Hi-Fi" };
+
+  it("creates the store pills once and migrates generic buckets", async () => {
+    const persistence = new MemoryPersistence();
+    const before = await Repository.open(persistence, makeOptions());
+    before.createBucket("groceries");
+    const onions = before.addTask("onions", "groceries");
+    await before.flush();
+
+    const repo = await Repository.open(persistence, makeOptions(2_000_000));
+    assert.equal(repo.applyStoreSetup(STORES, REMAP), true);
+    assert.deepEqual([...repo.listBuckets()].sort(), [...STORES].sort());
+    assert.deepEqual(repo.getTask(onions.id)!.buckets, ["Coles"]);
+    assert.deepEqual(repo.getTask(onions.id)!.trainedBuckets, ["Coles"]);
+    // Idempotent: recorded in the doc, never runs twice.
+    assert.equal(repo.applyStoreSetup(STORES, REMAP), false);
+  });
+
+  it("does not recreate a store the user deleted", async () => {
+    const persistence = new MemoryPersistence();
+    const repo = await Repository.open(persistence, makeOptions());
+    repo.applyStoreSetup(STORES, REMAP);
+    repo.deleteBucket("Uniqlo");
+    await repo.flush();
+
+    const reopened = await Repository.open(persistence, makeOptions(2_000_000));
+    assert.equal(reopened.applyStoreSetup(STORES, REMAP), false);
+    assert.ok(!reopened.listBuckets().includes("Uniqlo"));
+  });
+
+  it("auto-tags everyday captures into the right store", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.applyStoreSetup(STORES, REMAP);
+    assert.deepEqual(repo.addTask("milk and bread").buckets, ["Coles"]);
+    assert.deepEqual(repo.addTask("drill bits").buckets, ["Bunnings"]);
+    assert.deepEqual(repo.addTask("prescription refill").buckets, ["Chemist Warehouse"]);
+    assert.deepEqual(repo.addTask("hdmi cable").buckets, ["JB Hi-Fi"]);
+    assert.deepEqual(repo.addTask("stapler and paper").buckets, ["Officeworks"]);
+    assert.deepEqual(repo.addTask("bookshelf and cushions").buckets, ["Ikea"]);
+    assert.deepEqual(repo.addTask("storage tubs and hangers").buckets, ["Kmart"]);
+    assert.deepEqual(repo.addTask("socks and jeans").buckets, ["Uniqlo"]);
+  });
+});
+
 describe("Persistence and merge", () => {
   it("persists after mutations and reloads identically", async () => {
     const persistence = new MemoryPersistence();

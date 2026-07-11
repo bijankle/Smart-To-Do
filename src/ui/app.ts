@@ -30,6 +30,33 @@ let drive: DriveSync | null = null;
 const RECENT_COMPLETED_MS = 5 * 60_000;
 let graceTimer: number | undefined;
 
+/**
+ * Bespoke setup — this app is tailored to its owner's actual stores.
+ * Applied once (recorded in the synced document): creates these pills and
+ * folds any generic starter buckets into them.
+ */
+const MY_STORES = [
+  "Coles",
+  "Bunnings",
+  "Chemist Warehouse",
+  "JB Hi-Fi",
+  "Officeworks",
+  "Ikea",
+  "Kmart",
+  "Uniqlo",
+];
+const GENERIC_REMAP: Record<string, string> = {
+  groceries: "Coles",
+  food: "Coles",
+  hardware: "Bunnings",
+  tools: "Bunnings",
+  electronics: "JB Hi-Fi",
+  tech: "JB Hi-Fi",
+  health: "Chemist Warehouse",
+  medical: "Chemist Warehouse",
+  clothing: "Uniqlo",
+};
+
 const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
 
@@ -532,6 +559,7 @@ function render(): void {
 
 async function main(): Promise<void> {
   repo = await Repository.open(new WebStoragePersistence(window.localStorage));
+  repo.applyStoreSetup(MY_STORES, GENERIC_REMAP);
   $("#capture").addEventListener("submit", handleCapture as EventListener);
   window.addEventListener("keydown", handleUndoKeys);
   initSyncControls();

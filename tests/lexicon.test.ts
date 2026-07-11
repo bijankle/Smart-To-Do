@@ -53,9 +53,9 @@ describe("Seed lexicon", () => {
     assert.equal(conceptForBucketName("Woolworths")?.name, "groceries");
     assert.equal(conceptForBucketName("Coles")?.name, "groceries");
     assert.equal(conceptForBucketName("Chemist Warehouse")?.name, "health");
-    assert.equal(conceptForBucketName("Officeworks")?.name, "electronics");
-    assert.equal(conceptForBucketName("Ikea")?.name, "home");
-    assert.equal(conceptForBucketName("Kmart")?.name, "home");
+    assert.equal(conceptForBucketName("Officeworks")?.name, "stationery");
+    assert.equal(conceptForBucketName("Ikea")?.name, "furniture");
+    assert.equal(conceptForBucketName("Kmart")?.name, "homewares");
     assert.equal(conceptForBucketName("Uniqlo")?.name, "clothing");
     assert.deepEqual(names(matchConcepts(tokenize("get a medical assessment"))), ["health"]);
   });
