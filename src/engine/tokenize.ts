@@ -84,6 +84,9 @@ export function correctToken(token: string, vocab: Set<string>): string | null {
   let best: string | null = null;
   let bestDistance = max + 1;
   for (const word of vocab) {
+    // Typos rarely break the first letter — and this guard stops real words
+    // from drifting into lookalikes ("chopping" → "shopping").
+    if (word[0] !== token[0]) continue;
     const distance = editDistance(token, word, max);
     if (distance < bestDistance) {
       bestDistance = distance;
