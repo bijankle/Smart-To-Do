@@ -11,11 +11,11 @@ A local, cross-platform smart to-do list. Tasks are categorized **entirely on-de
 
 ```
 ┌─────────────────────────────────────────────┐
-│ 4. Sync Adapter (Google Drive / file-based) │  Phase 4
+│ 4. Sync Adapter (cloud remote, pluggable)   │  Phase 4
 ├─────────────────────────────────────────────┤
 │ 3. UI Shell (installable PWA, Blurprint UI) │  Phase 3
 ├─────────────────────────────────────────────┤
-│ 2. Storage + Classifier Training Store      │  Phase 2
+│ 2. Storage + Classifier Training Store      │  Phase 2  ✅
 ├─────────────────────────────────────────────┤
 │ 1. Parsing Engine (pure fns, zero deps)     │  Phase 1  ✅
 └─────────────────────────────────────────────┘
@@ -32,13 +32,23 @@ Every layer below the UI is plain ESM TypeScript with **zero runtime dependencie
 | `src/engine/classify.ts` | Naive Bayes model: `train` / `untrain` / `classify`, JSON-serializable so the model syncs with the tasks. |
 | `src/engine/parse.ts` | `parseTask(text)` → `{ title, due, bucket, confidence }`; low-confidence suggestions fall back to the Inbox. |
 
-Decisions locked in so far (change requests welcome — these are constants, not architecture):
+### Phase 2 — Storage & Training Store (done)
 
-- `"friday"` / `"this friday"` / `"on friday"` → soonest occurrence, today included.
-- `"next friday"` → soonest occurrence **+ 7 days**.
-- Week starts Monday; `"end of week"` → this week's Sunday; `"next week"` → next Monday.
-- Dates are stored as local-calendar `YYYY-MM-DD` strings; no time-of-day yet.
+| Module | Purpose |
+| --- | --- |
+| `src/storage/doc.ts` | The single sync-ready JSON document: tasks + buckets + classifier model, with tombstone deletes and per-record `modifiedAt` for deterministic last-write-wins merging (`mergeDocs`). |
+| `src/storage/persistence.ts` | Two-method `Persistence` interface (`load`/`save`) with in-memory and Web Storage adapters; OPFS/native-file/cloud adapters slot in behind the same interface. |
+| `src/storage/repo.ts` | `Repository` — the API the UI talks to: capture with auto-bucketing, pill filters (`all` / `inbox` / bucket), manual ordering (`moveToTop`, `moveAfter`), and correction-driven training. |
+
+Product decisions locked in:
+
+- **No priority tags.** Importance is expressed by position: new tasks enter at the top, and `moveToTop`/drag-reorder are first-class operations persisted in the task's `order` field.
+- **No due-date UI.** The relative-date engine from Phase 1 remains in the codebase but is off by default; capture text is classified whole.
+- **Pill-bar navigation.** The UI is a row of Blurprint role-pills at the top — `All`, plus one pill per user bucket (and Inbox for untagged tasks) — filtering a single list below.
+- **Training only on explicit signals.** The classifier learns when a task is captured into, or moved to, a bucket by the user — never from its own predictions. A background pseudo-class keeps unfamiliar text in the Inbox instead of force-filing it.
 - Default classifier confidence threshold: `0.55` (below it → Inbox).
+
+Parsing-engine constants (dormant while the date UI is off): `"friday"`-style words resolve to the soonest occurrence (today included), `"next friday"` adds 7 days, weeks start Monday, dates serialize as local `YYYY-MM-DD`.
 
 ### UI theme (Phase 3 prep)
 
