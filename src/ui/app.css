@@ -310,6 +310,21 @@ body {
   border-color: var(--accent);
 }
 
+.pill-x {
+  margin-left: 2px;
+  padding: 0 3px;
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--accent-deep);
+  border-radius: var(--radius-pill);
+}
+
+.pill-x:hover {
+  color: var(--danger);
+  background: var(--danger-tint);
+}
+
 .pill-input {
   height: 30px;
   width: 110px;

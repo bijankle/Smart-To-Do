@@ -126,7 +126,7 @@ function handleUndoKeys(event: KeyboardEvent): void {
 function pill(
   label: string,
   count: number,
-  options: { active: boolean; auto?: boolean },
+  options: { active: boolean; auto?: boolean; onDelete?: () => void },
   onClick: () => void,
 ): HTMLButtonElement {
   const button = document.createElement("button");
@@ -148,6 +148,18 @@ function pill(
     badge.textContent = String(count);
     button.append(badge);
   }
+  // The selected pill grows a small × so tags can be deleted in place.
+  if (options.active && options.onDelete) {
+    const remove = document.createElement("span");
+    remove.className = "pill-x";
+    remove.textContent = "×";
+    remove.title = "Delete this tag";
+    remove.addEventListener("click", (e) => {
+      e.stopPropagation();
+      options.onDelete!();
+    });
+    button.append(remove);
+  }
   button.addEventListener("click", onClick);
   return button;
 }
@@ -164,7 +176,19 @@ function renderPills(): void {
       pill(
         bucket.name,
         repo.listTasks(bucket.name).length,
-        { active: filter === bucket.name, auto: bucket.auto },
+        {
+          active: filter === bucket.name,
+          auto: bucket.auto,
+          onDelete: () => {
+            const ok = window.confirm(
+              `Delete the “${bucket.name}” tag? Tasks keep their other tags.`,
+            );
+            if (!ok) return;
+            repo.deleteBucket(bucket.name);
+            filter = "all";
+            render();
+          },
+        },
         () => setFilter(bucket.name),
       ),
     );
