@@ -1,0 +1,74 @@
+/*
+ * Blurprint theme tokens — extracted from the uploaded UI guide
+ * ("Discord's feel, tuned for paper"). Phase 3 components consume ONLY these
+ * variables; no raw hex values in component styles.
+ *
+ * Principles from the guide:
+ *  - Outline over fill: panels use 1px borders + 12–16px radius, not washes.
+ *  - Accent (blurple) is reserved for small areas: dots, badges, primary buttons.
+ *  - Active nav items: light blurple tint + 4px left bar, not heavy highlight.
+ *  - Controls: 8px radius, 44px tall targets (34px small).
+ *  - Tooltips stay dark (#1E1F22) for contrast on the white canvas.
+ */
+
+:root {
+  /* Accent */
+  --accent: #5865f2;          /* Blurple */
+  --accent-deep: #4752c4;     /* hover / text-on-tint */
+  --accent-tint: #eef0fe;     /* pill + active-nav background */
+  --accent-tint-border: #e0e3fb;
+  --accent-focus-ring: #e4e7fc;
+
+  /* Status */
+  --success: #3ba55c;
+  --success-tint: #e7f4ec;
+  --success-text: #2c7a47;
+  --warning: #e0a416;
+  --warning-tint: #fbf1d8;
+  --warning-text: #9a6f0c;
+  --danger: #d83c3e;
+  --danger-tint: #fceded;
+  --danger-border: #edb5b6;
+
+  /* Cool gray neutral ramp */
+  --gray-0: #ffffff;
+  --gray-50: #f8f9fb;
+  --gray-100: #f2f3f5;
+  --gray-200: #e3e5e8;
+  --gray-300: #c7cad1;
+  --gray-400: #b5bac1;
+  --gray-500: #9a9da5;
+  --gray-600: #80848e;
+  --gray-700: #5c5e66;
+  --gray-800: #4e5058;
+  --gray-900: #2e3035;
+  --gray-950: #1e1f22;
+
+  /* Semantic aliases */
+  --bg: var(--gray-0);
+  --bg-subtle: var(--gray-50);
+  --bg-hover: var(--gray-100);
+  --border: var(--gray-200);
+  --border-strong: var(--gray-300);
+  --text: var(--gray-900);
+  --text-secondary: var(--gray-800);
+  --text-muted: var(--gray-600);
+  --text-faint: var(--gray-500);
+
+  /* Geometry */
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+  --control-height: 44px;
+  --control-height-small: 34px;
+
+  /* Type */
+  --font-ui: "Aptos", "Segoe UI Variable Text", "Segoe UI", system-ui,
+    -apple-system, sans-serif;
+  --font-mono: "Aptos Mono", "Cascadia Code", ui-monospace, monospace;
+
+  /* Elevation */
+  --shadow-card: 0 1px 2px rgba(30, 31, 34, 0.04);
+  --shadow-tooltip: 0 4px 14px rgba(30, 31, 34, 0.18);
+}
