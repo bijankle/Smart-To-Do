@@ -26,6 +26,10 @@ let filter: TaskFilter = "all";
 let showCompleted = false;
 let drive: DriveSync | null = null;
 
+/** Just-ticked items stay visible this long (a shopping run) before tucking away. */
+const RECENT_COMPLETED_MS = 5 * 60_000;
+let graceTimer: number | undefined;
+
 const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
 
@@ -330,13 +334,20 @@ function closeTagMenu(): void {
   document.getElementById("tag-menu")?.remove();
 }
 
+function completedAtMs(t: TaskRecord): number {
+  return Date.parse(t.completedAt ?? t.modifiedAt);
+}
+
 function renderList(): void {
   const list = $("#list");
   list.replaceChildren();
   const open = repo.listTasks(filter);
-  const completed = showCompleted ? repo.listCompleted(filter) : [];
+  const completed = repo.listCompleted(filter);
+  const cutoff = Date.now() - RECENT_COMPLETED_MS;
+  const recent = completed.filter((t) => completedAtMs(t) >= cutoff);
+  const shownCompleted = showCompleted ? completed : recent;
 
-  if (open.length === 0 && completed.length === 0) {
+  if (open.length === 0 && shownCompleted.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty";
     empty.textContent =
@@ -344,17 +355,25 @@ function renderList(): void {
         ? "Nothing here yet — add your first task above."
         : `No tasks tagged “${filter}” yet.`;
     list.append(empty);
-    return;
+  } else {
+    for (const task of open) list.append(renderRow(task));
+    if (shownCompleted.length > 0) {
+      const divider = document.createElement("div");
+      divider.className = "list-divider";
+      divider.textContent = showCompleted ? "Completed" : "Just completed";
+      list.append(divider);
+      for (const task of shownCompleted) list.append(renderRow(task));
+    }
   }
 
-  for (const task of open) list.append(renderRow(task));
-
-  if (completed.length > 0) {
-    const divider = document.createElement("div");
-    divider.className = "list-divider";
-    divider.textContent = "Completed";
-    list.append(divider);
-    for (const task of completed) list.append(renderRow(task));
+  // Re-render when the oldest visible "just completed" item ages out.
+  window.clearTimeout(graceTimer);
+  if (!showCompleted && recent.length > 0) {
+    const oldest = Math.min(...recent.map(completedAtMs));
+    graceTimer = window.setTimeout(
+      render,
+      Math.max(1000, oldest + RECENT_COMPLETED_MS - Date.now() + 250),
+    );
   }
 }
 
@@ -366,30 +385,32 @@ function renderFooter(): void {
     showCompleted = false;
     return;
   }
+  const cutoff = Date.now() - RECENT_COMPLETED_MS;
+  const older = completed.filter((t) => completedAtMs(t) < cutoff);
 
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "btn-ghost";
-  toggle.textContent = showCompleted
-    ? "Hide completed"
-    : `Show ${completed.length} completed`;
-  toggle.addEventListener("click", () => {
-    showCompleted = !showCompleted;
-    render();
-  });
-  footer.append(toggle);
-
-  if (showCompleted) {
-    const clear = document.createElement("button");
-    clear.type = "button";
-    clear.className = "btn-ghost btn-ghost-danger";
-    clear.textContent = "Clear completed";
-    clear.addEventListener("click", () => {
-      for (const task of completed) repo.deleteTask(task.id);
+  if (older.length > 0 || showCompleted) {
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "btn-ghost";
+    toggle.textContent = showCompleted
+      ? "Hide older completed"
+      : `Show ${older.length} older completed`;
+    toggle.addEventListener("click", () => {
+      showCompleted = !showCompleted;
       render();
     });
-    footer.append(clear);
+    footer.append(toggle);
   }
+
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "btn-ghost btn-ghost-danger";
+  clear.textContent = "Clear completed";
+  clear.addEventListener("click", () => {
+    for (const task of completed) repo.deleteTask(task.id);
+    render();
+  });
+  footer.append(clear);
 }
 
 // ---- sync ------------------------------------------------------------------
@@ -492,6 +513,13 @@ async function main(): Promise<void> {
   initSyncControls();
   render();
   $<HTMLInputElement>("#capture-input").focus();
+
+  // Offline support when hosted (skipped during local development).
+  if ("serviceWorker" in navigator && location.hostname !== "localhost") {
+    navigator.serviceWorker.register("./sw.js").catch(() => {
+      /* not fatal — the app still works online */
+    });
+  }
 }
 
 void main();

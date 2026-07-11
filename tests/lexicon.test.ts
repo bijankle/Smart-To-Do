@@ -49,8 +49,23 @@ describe("Seed lexicon", () => {
   it("recognizes store names and medical phrasing", () => {
     assert.equal(conceptForBucketName("Bunnings")?.name, "hardware");
     assert.equal(conceptForBucketName("JB Hi-Fi")?.name, "electronics");
+    assert.equal(conceptForBucketName("jbhifi")?.name, "electronics");
     assert.equal(conceptForBucketName("Woolworths")?.name, "groceries");
+    assert.equal(conceptForBucketName("Coles")?.name, "groceries");
+    assert.equal(conceptForBucketName("Chemist Warehouse")?.name, "health");
+    assert.equal(conceptForBucketName("Officeworks")?.name, "electronics");
+    assert.equal(conceptForBucketName("Ikea")?.name, "home");
+    assert.equal(conceptForBucketName("Kmart")?.name, "home");
+    assert.equal(conceptForBucketName("Uniqlo")?.name, "clothing");
     assert.deepEqual(names(matchConcepts(tokenize("get a medical assessment"))), ["health"]);
+  });
+
+  it("files clothing and stationery runs into store buckets", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.createBucket("uniqlo");
+    repo.createBucket("Officeworks");
+    assert.deepEqual(repo.addTask("socks and a hoodie").buckets, ["uniqlo"]);
+    assert.deepEqual(repo.addTask("stapler and highlighters").buckets, ["Officeworks"]);
   });
 
   it("matches a decisive single word ('laptop')", () => {

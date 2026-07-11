@@ -50,7 +50,13 @@ const RAW: RawConcept[] = [
     name: "electronics",
     aliases: "electronics electronic tech gadgets gadget jb jbhifi officeworks bestbuy harvey",
     vocabulary:
-      "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud speaker soundbar phone tablet camera webcam drone console controller router modem printer ink toner cartridge ssd harddrive drive ram memory gpu cpu processor motherboard case fan projector smartwatch fitbit kindle remote antenna surge protector powerbank sim stylus tripod microphone gopro chromecast roku firestick",
+      "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud speaker soundbar phone tablet camera webcam drone console controller router modem printer ink toner cartridge ssd harddrive drive ram memory gpu cpu processor motherboard case fan projector smartwatch fitbit kindle remote antenna surge protector powerbank sim stylus tripod microphone gopro chromecast roku firestick pen pencil notebook stapler staple envelope binder marker highlighter stationery laminate whiteboard",
+  },
+  {
+    name: "clothing",
+    aliases: "clothing clothes apparel fashion wardrobe uniqlo zara myer cottonon",
+    vocabulary:
+      "shirt tshirt tee top pants jeans shorts jacket hoodie sweater jumper coat sock undies underwear boxer brief bra dress skirt suit tie belt shoe sneaker runner boot sandal thong scarf glove beanie hat cap pyjama legging singlet blazer cardigan trouser polo swimsuit swimmer trunks activewear uniform vest denim flannel raincoat slipper heel loafer",
   },
   {
     name: "computer",
