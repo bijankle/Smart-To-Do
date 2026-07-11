@@ -58,7 +58,16 @@ The UI follows the **Blurprint** design guide (Discord's geometry on a white, pr
 
 ## Running the app
 
-Requires [Node.js](https://nodejs.org) (LTS). Then, from the project folder:
+Requires [Node.js](https://nodejs.org) (LTS).
+
+**Easiest (macOS):** get the project once with git, then double-click `Start Smart To-Do.command` any time — it pulls the latest version, rebuilds, starts the server, and opens the app in your browser.
+
+```bash
+# one-time setup
+git clone -b claude/smart-todo-list-arch-dpf2wq https://github.com/bijankle/Smart-To-Do.git
+```
+
+**Manual alternative** — from the project folder:
 
 ```bash
 npm install     # one-time setup (dev-only deps: typescript, @types/node)
