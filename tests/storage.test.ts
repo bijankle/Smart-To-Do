@@ -185,6 +185,38 @@ describe("Repository — bespoke store setup", () => {
     assert.equal(repo.applyStoreSetup(STORES, REMAP), false);
   });
 
+  it("setup v3 rebuilds the classifier and re-tags stale auto tags", async () => {
+    const persistence = new MemoryPersistence();
+    const before = await Repository.open(persistence, makeOptions());
+    before.applyStoreSetup([...STORES, "Medical", "Chemist Warehouse"], REMAP);
+    await before.flush();
+
+    // Simulate the pre-split world: 'Medical appointment' auto-tagged into
+    // Chemist Warehouse, with the doc still at setup v2.
+    const doc = JSON.parse((await persistence.load())!);
+    const ts = "2026-01-01T00:00:00.000Z";
+    doc.tasks["stale"] = {
+      id: "stale", title: "Medical appointment", buckets: ["Chemist Warehouse"],
+      done: false, completedAt: null, order: 0, createdAt: ts, modifiedAt: ts,
+      deletedAt: null, trainedBuckets: [],
+    };
+    // A web-checked film tag the lexicon can't reproduce must survive.
+    doc.tasks["film"] = {
+      id: "film", title: "the matrix", buckets: ["Films"], done: false,
+      completedAt: null, order: 1, createdAt: ts, modifiedAt: ts,
+      deletedAt: null, trainedBuckets: [],
+    };
+    doc.buckets["Films"] = { name: "Films", createdAt: ts, modifiedAt: ts, deletedAt: null };
+    doc.setupVersion = 2;
+    await persistence.save(JSON.stringify(doc));
+
+    const repo = await Repository.open(persistence, makeOptions(9_000_000));
+    assert.equal(repo.applyStoreSetup([...STORES, "Medical", "Chemist Warehouse"], REMAP), true);
+    assert.deepEqual(repo.getTask("stale")!.buckets, ["Medical"]);
+    assert.deepEqual(repo.getTask("film")!.buckets, ["Films"]);
+    assert.equal(repo.applyStoreSetup([...STORES, "Medical", "Chemist Warehouse"], REMAP), false);
+  });
+
   it("does not recreate a store the user deleted", async () => {
     const persistence = new MemoryPersistence();
     const repo = await Repository.open(persistence, makeOptions());

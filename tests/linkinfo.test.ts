@@ -69,6 +69,40 @@ describe("Pasted media links", () => {
     assert.equal(result?.info["Year"], "2023");
   });
 
+  it("parses share-sheet text with shortener links (the Google-app share format)", () => {
+    const share = parseMediaLink("The Matrix (1999) - IMDb https://share.google/u74UxoQQ19N8EWqyu");
+    assert.equal(share?.kind, "imdb-share");
+    assert.equal(share?.slugTitle, "The Matrix");
+    assert.equal(share?.year, "1999");
+    assert.equal(share?.url, "https://share.google/u74UxoQQ19N8EWqyu");
+
+    const grShare = parseMediaLink("Project Hail Mary - Goodreads https://share.google/abc123");
+    assert.equal(grShare?.kind, "goodreads-share");
+    assert.equal(grShare?.slugTitle, "Project Hail Mary");
+
+    const generic = parseMediaLink("cool recipe https://example.com/pasta");
+    assert.equal(generic?.kind, "link");
+    assert.equal(generic?.slugTitle, "cool recipe");
+  });
+
+  it("enriches a share-text film by title via the movie catalogue", async () => {
+    const fakeFetch = (async () => ({
+      ok: true,
+      json: async () => ({
+        results: [
+          { kind: "feature-movie", trackName: "The Matrix", artistName: "Lana Wachowski & Lilly Wachowski", releaseDate: "1999-03-31T00:00:00Z", primaryGenreName: "Sci-Fi & Fantasy" },
+          { kind: "feature-movie", trackName: "The Matrix Reloaded", releaseDate: "2003-05-15T00:00:00Z" },
+        ],
+      }),
+    })) as unknown as typeof fetch;
+
+    const link = parseMediaLink("The Matrix (1999) - IMDb https://share.google/xyz")!;
+    const result = await fetchLinkInfo(link, fakeFetch);
+    assert.equal(result?.title, "The Matrix");
+    assert.equal(result?.info["Year"], "1999");
+    assert.equal(result?.info["Genre"], "Sci-Fi & Fantasy");
+  });
+
   it("fails soft when offline", async () => {
     const failing = (async () => {
       throw new Error("offline");

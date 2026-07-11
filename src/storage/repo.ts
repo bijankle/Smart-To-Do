@@ -14,7 +14,7 @@
  *  - Persistence after every mutation through the injected adapter.
  */
 
-import { classify, ensureBucket, seed, train, untrain } from "../engine/classify.js";
+import { classify, createModel, ensureBucket, seed, train, untrain } from "../engine/classify.js";
 import { CONCEPTS, conceptForBucketName, matchConcepts, type Concept } from "../engine/lexicon.js";
 import { tokenize } from "../engine/tokenize.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD } from "../engine/parse.js";
@@ -90,8 +90,20 @@ export class Repository {
    * bucket is deleted. Stores the user tombstoned are never resurrected.
    */
   applyStoreSetup(stores: string[], remap: Record<string, string>): boolean {
-    if ((this.doc.setupVersion ?? 0) >= 2) return false;
+    const version = this.doc.setupVersion ?? 0;
+    if (version >= 3) return false;
 
+    if (version < 2) this.applyPillSetup(stores, remap);
+    // v3: concepts were restructured (e.g. Medical split from Chemist) — the
+    // classifier carries stale seeds, so rebuild it and refresh auto tags.
+    this.rebuildClassifier();
+    this.retagAuto();
+    this.doc.setupVersion = 3;
+    this.scheduleSave();
+    return true;
+  }
+
+  private applyPillSetup(stores: string[], remap: Record<string, string>): void {
     for (const store of stores) {
       if (!this.doc.buckets[store]) this.createBucket(store);
     }
@@ -117,10 +129,57 @@ export class Repository {
       }
       this.deleteBucket(bucket.name);
     }
+  }
 
-    this.doc.setupVersion = 2;
+  /**
+   * Rebuild the classifier from scratch: fresh seeds from the CURRENT
+   * concepts for every live bucket, then replay the user's own training.
+   * Run when concept definitions change shape between versions.
+   */
+  rebuildClassifier(): void {
+    this.doc.model = createModel();
+    const ts = this.now().toISOString();
+    for (const bucket of Object.values(this.doc.buckets)) {
+      if (bucket.deletedAt !== null) continue;
+      ensureBucket(this.doc.model, bucket.name);
+      const concept = conceptForBucketName(bucket.name);
+      if (concept) {
+        seed(this.doc.model, bucket.name, concept.vocabulary);
+        bucket.seeded = true;
+        bucket.modifiedAt = ts;
+      }
+    }
+    for (const task of Object.values(this.doc.tasks)) {
+      if (task.deletedAt !== null) continue;
+      task.trainedBuckets = task.trainedBuckets.filter((b) => this.isLiveBucket(b));
+      for (const bucket of task.trainedBuckets) train(this.doc.model, bucket, task.title);
+    }
+    this.doc.modelModifiedAt = ts;
     this.scheduleSave();
-    return true;
+  }
+
+  /**
+   * Re-run auto-tagging on open tasks whose tags came purely from automation
+   * (never hand-tagged, never link-sourced). Only ever REPLACES tags when the
+   * fresh result is non-empty — background suggestions the lexicon can't
+   * reproduce (e.g. web-checked film titles) are left alone.
+   */
+  retagAuto(): void {
+    let changed = false;
+    for (const task of Object.values(this.doc.tasks)) {
+      if (task.deletedAt !== null || task.done || task.manualTags || task.link) continue;
+      if (task.trainedBuckets.length > 0) continue;
+      const tags = this.autoTag(task.title);
+      if (tags.length === 0) continue;
+      const same =
+        tags.length === task.buckets.length && tags.every((t) => task.buckets.includes(t));
+      if (!same) {
+        task.buckets = tags;
+        task.modifiedAt = this.now().toISOString();
+        changed = true;
+      }
+    }
+    if (changed) this.scheduleSave();
   }
 
   /** Live buckets mapped to a concept name (for the background web check). */

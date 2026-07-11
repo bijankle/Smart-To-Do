@@ -87,20 +87,33 @@ const undoStack: CaptureEntry[] = [];
 const redoStack: CaptureEntry[] = [];
 
 function submitCapture(raw: string): void {
-  // Pasted Goodreads/IMDb links become enriched Books/Films tasks.
+  // Pasted Goodreads/IMDb links (or share-sheet text) become enriched tasks.
   const media = parseMediaLink(raw);
-  if (media) {
-    const conceptName = media.kind === "goodreads" ? "books" : "films";
+  if (media && media.kind !== "link") {
+    const conceptName = media.kind.startsWith("goodreads") ? "books" : "films";
     const buckets = repo.bucketsForConceptName(conceptName);
+    // URL slugs are lowercase (title-case them); share text keeps its casing.
     const placeholder = media.slugTitle
-      ? titleCase(media.slugTitle)
-      : media.kind === "goodreads"
+      ? media.kind === "goodreads"
+        ? titleCase(media.slugTitle)
+        : media.slugTitle
+      : conceptName === "books"
         ? "Goodreads book"
         : "IMDb film";
     const task = repo.addLinkedTask(placeholder, buckets, media.url, {});
     undoStack.push({ text: raw, taskId: task.id });
     render();
     void enrichLinkedTask(task.id, media);
+    return;
+  }
+  if (media) {
+    // Any other URL: capture the surrounding text as the task, keep the link.
+    const title = media.slugTitle ?? new URL(media.url).hostname;
+    const task = repo.addTask(title);
+    repo.attachInfo(task.id, { link: media.url });
+    undoStack.push({ text: raw, taskId: task.id });
+    render();
+    void webCheckUntagged();
     return;
   }
 

@@ -9,12 +9,20 @@
  */
 
 export interface MediaLink {
-  kind: "goodreads" | "imdb";
+  /**
+   * goodreads/imdb: a real site URL (id known). *-share: share-sheet text
+   * like "The Matrix (1999) - IMDb https://share.google/..." where the title
+   * lives in the text and the URL is a shortener. link: any other URL.
+   */
+  kind: "goodreads" | "imdb" | "imdb-share" | "goodreads-share" | "link";
   url: string;
-  id: string;
-  /** Human-ish title recovered from the URL slug, when present. */
+  id: string | null;
+  /** Title recovered from the URL slug or the share text, when present. */
   slugTitle: string | null;
+  year: string | null;
 }
+
+const URL_PATTERN = /https?:\/\/\S+/gi;
 
 export function parseMediaLink(text: string): MediaLink | null {
   const goodreads = /https?:\/\/(?:www\.)?goodreads\.com\/book\/show\/(\d+)(?:[-.]([\w~%-]+))?/i.exec(text);
@@ -22,13 +30,28 @@ export function parseMediaLink(text: string): MediaLink | null {
     const slug = goodreads[2]
       ? decodeURIComponent(goodreads[2]).replace(/[-_]+/g, " ").trim()
       : null;
-    return { kind: "goodreads", url: goodreads[0], id: goodreads[1]!, slugTitle: slug || null };
+    return { kind: "goodreads", url: goodreads[0], id: goodreads[1]!, slugTitle: slug || null, year: null };
   }
   const imdb = /https?:\/\/(?:www\.|m\.)?imdb\.com\/title\/(tt\d+)/i.exec(text);
   if (imdb) {
-    return { kind: "imdb", url: imdb[0], id: imdb[1]!, slugTitle: null };
+    return { kind: "imdb", url: imdb[0], id: imdb[1]!, slugTitle: null, year: null };
   }
-  return null;
+
+  // Share-sheet text: the URL is a shortener, but the title is in the text.
+  const anyUrl = new RegExp(URL_PATTERN).exec(text);
+  if (!anyUrl) return null;
+  const url = anyUrl[0];
+  const textPart = text.replace(new RegExp(URL_PATTERN), " ").replace(/\s+/g, " ").trim();
+
+  const imdbShare = /^(.+?)\s*(?:\((\d{4})\))?\s*[-–—]\s*IMDb\b/i.exec(textPart);
+  if (imdbShare) {
+    return { kind: "imdb-share", url, id: null, slugTitle: imdbShare[1]!.trim(), year: imdbShare[2] ?? null };
+  }
+  const goodreadsShare = /^(.+?)\s*[-–—]?\s*(?:by\s+.+?\s*[-–—]\s*)?Goodreads\b/i.exec(textPart);
+  if (goodreadsShare && /goodreads/i.test(textPart)) {
+    return { kind: "goodreads-share", url, id: null, slugTitle: goodreadsShare[1]!.trim(), year: null };
+  }
+  return { kind: "link", url, id: null, slugTitle: textPart || null, year: null };
 }
 
 export function titleCase(text: string): string {
@@ -114,14 +137,54 @@ async function fetchFilmInfo(link: MediaLink, fetchFn: typeof fetch): Promise<Li
   return { title, info };
 }
 
+interface ItunesMovie {
+  kind?: string;
+  trackName?: string;
+  artistName?: string;
+  releaseDate?: string;
+  primaryGenreName?: string;
+}
+
+/** Share-text films carry a title, not an id — resolve via iTunes movie search. */
+async function fetchFilmByTitle(link: MediaLink, fetchFn: typeof fetch): Promise<LinkInfo | null> {
+  const title = link.slugTitle;
+  if (!title) return null;
+  const url =
+    "https://itunes.apple.com/search?media=movie&limit=8&country=AU&term=" +
+    encodeURIComponent(title);
+  const response = await fetchFn(url);
+  if (!response.ok) return null;
+  const data = (await response.json()) as { results?: ItunesMovie[] };
+  const target = normalize(title);
+  const candidates = (data.results ?? []).filter(
+    (r) => r.kind === "feature-movie" && normalize(r.trackName) === target,
+  );
+  const match = candidates.find((r) => link.year && r.releaseDate?.startsWith(link.year)) ?? candidates[0];
+  if (!match) return null;
+  const info: Record<string, string> = {};
+  if (match.artistName) info["Director"] = match.artistName;
+  const year = match.releaseDate?.slice(0, 4) ?? link.year;
+  if (year) info["Year"] = year;
+  if (match.primaryGenreName) info["Genre"] = match.primaryGenreName;
+  return { title: match.trackName ?? title, info };
+}
+
 export async function fetchLinkInfo(
   link: MediaLink,
   fetchFn: typeof fetch = fetch,
 ): Promise<LinkInfo | null> {
   try {
-    return link.kind === "goodreads"
-      ? await fetchBookInfo(link, fetchFn)
-      : await fetchFilmInfo(link, fetchFn);
+    switch (link.kind) {
+      case "goodreads":
+      case "goodreads-share":
+        return await fetchBookInfo(link, fetchFn);
+      case "imdb":
+        return await fetchFilmInfo(link, fetchFn);
+      case "imdb-share":
+        return await fetchFilmByTitle(link, fetchFn);
+      default:
+        return null;
+    }
   } catch {
     return null; // offline — the task keeps its slug title and link
   }
