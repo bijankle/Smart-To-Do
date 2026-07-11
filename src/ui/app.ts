@@ -560,6 +560,7 @@ function render(): void {
 async function main(): Promise<void> {
   repo = await Repository.open(new WebStoragePersistence(window.localStorage));
   repo.applyStoreSetup(MY_STORES, GENERIC_REMAP);
+  repo.retagUntagged();
   $("#capture").addEventListener("submit", handleCapture as EventListener);
   window.addEventListener("keydown", handleUndoKeys);
   initSyncControls();

@@ -60,6 +60,51 @@ describe("Seed lexicon", () => {
     assert.deepEqual(names(matchConcepts(tokenize("get a medical assessment"))), ["health"]);
   });
 
+  it("multi-store products tag into every store that sells them", async () => {
+    assert.deepEqual(names(matchConcepts(tokenize("condoms"))), ["groceries", "health"]);
+    assert.deepEqual(names(matchConcepts(tokenize("bandaids and lube"))), ["groceries", "health"]);
+
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.createBucket("Coles");
+    repo.createBucket("Chemist Warehouse");
+    const task = repo.addTask("condoms");
+    assert.deepEqual([...task.buckets].sort(), ["Chemist Warehouse", "Coles"]);
+    assert.deepEqual([...repo.addTask("panadol and bandaids").buckets].sort(), [
+      "Chemist Warehouse",
+      "Coles",
+    ]);
+  });
+
+  it("understands brand names ('milo and glad wrap')", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.createBucket("Coles");
+    repo.createBucket("Bunnings");
+    assert.deepEqual(repo.addTask("milo and glad wrap").buckets, ["Coles"]);
+    assert.deepEqual(repo.addTask("ryobi drill and dulux paint").buckets, ["Bunnings"]);
+  });
+
+  it("retagUntagged files stuck items once the vocabulary catches up", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    const stuck = repo.addTask("bandaids"); // no buckets exist yet
+    assert.deepEqual(stuck.buckets, []);
+    repo.createBucket("Coles");
+    repo.createBucket("Chemist Warehouse");
+    repo.retagUntagged();
+    assert.deepEqual([...repo.getTask(stuck.id)!.buckets].sort(), ["Chemist Warehouse", "Coles"]);
+  });
+
+  it("retagUntagged never re-adds tags the user removed", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.createBucket("Coles");
+    repo.createBucket("Chemist Warehouse");
+    const task = repo.addTask("condoms");
+    repo.toggleBucket(task.id, "Coles"); // user says: not from Coles
+    repo.toggleBucket(task.id, "Chemist Warehouse"); // ...nor the chemist
+    assert.deepEqual(repo.getTask(task.id)!.buckets, []);
+    repo.retagUntagged();
+    assert.deepEqual(repo.getTask(task.id)!.buckets, []);
+  });
+
   it("files clothing and stationery runs into store buckets", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("uniqlo");

@@ -32,31 +32,43 @@ interface RawConcept {
   vocabulary: string;
 }
 
+/**
+ * Products sold at BOTH supermarkets and chemists. Listed in both concepts'
+ * vocabularies, so a capture like "condoms" tags into Coles AND Chemist
+ * Warehouse — the engine multi-tags whenever several concepts match.
+ */
+const PERSONAL_CARE =
+  "condom lube lubricant bandaid bandage plaster gauze panadol paracetamol nurofen ibuprofen aspirin antiseptic dettol savlon tampon liner sanitary deodorant antiperspirant shampoo conditioner bodywash soap toothpaste toothbrush floss mouthwash listerine razor shave shaving gillette schick sunscreen aloe moisturiser moisturizer lotion balm vaseline tissue cotton swab wipe nappy nappies huggies babylove formula colgate sensodyne nivea dove rexona lynx berocca oil vitamin";
+
 const RAW: RawConcept[] = [
   {
     name: "groceries",
     aliases:
       "groceries grocery food supermarket shopping coles woolworths woolies aldi iga costco kroger safeway tesco lidl",
     vocabulary:
-      "milk egg bread butter cheese yogurt cream celery onion garlic potato tomato lettuce spinach carrot broccoli cucumber pepper mushroom apple banana orange grape berry strawberry lemon lime avocado rice pasta noodle flour sugar salt spice cereal oat granola coffee tea juice soda beer wine chicken beef pork fish salmon shrimp bacon sausage ham turkey tofu bean lentil nut almond peanut snack chip cracker cookie chocolate candy sauce ketchup mustard mayo oil vinegar honey jam jelly frozen pizza soup produce dairy bakery deli fruit vegetable meat seafood grocery groceries supermarket",
+      `milk egg bread butter cheese yogurt cream celery onion garlic potato tomato lettuce spinach carrot broccoli cucumber pepper mushroom apple banana orange grape berry strawberry lemon lime avocado rice pasta noodle flour sugar salt spice cereal oat granola coffee tea juice soda beer wine chicken beef pork fish salmon shrimp bacon sausage ham turkey tofu bean lentil nut almond peanut snack chip cracker cookie chocolate candy sauce ketchup mustard mayo vinegar honey jam jelly frozen pizza soup produce dairy bakery deli fruit vegetable meat seafood grocery groceries supermarket ` +
+      // Brands and packaged goods people actually write on lists:
+      `milo vegemite weetbix nutella tam arnott arnotts cadbury nescafe moccona bega helga tiptop sanitarium kellogg kelloggs masterfoods heinz leggo dolmio praise barilla coke cola pepsi sprite fanta schweppes lipton twinings dilmah doritos smith smiths pringles allens yoplait chobani vaalia ` +
+      // Supermarket cleaning/household aisle:
+      `omo dynamo fairy finish ajax windex chux glad gladwrap wrap foil alfoil baking sponge detergent dishwashing bleach napisan ${PERSONAL_CARE}`,
   },
   {
     name: "hardware",
     aliases: "hardware tools tool diy workshop bunnings mitre lowes homedepot screwfix",
     vocabulary:
-      "hammer nail screw screwdriver drill bit saw wrench plier bolt washer anchor stud lumber wood plank plywood paint primer brush roller caulk glue tape measure level sander sandpaper ladder toolbox socket blade tile grout cement concrete pipe fitting valve wire cable outlet switch breaker fuse hinge knob lock shelf bracket hook lightbulb bulb battery filter duct insulation drywall stain varnish clamp chisel",
+      "hammer nail screw screwdriver drill bit saw wrench plier bolt washer anchor stud lumber wood plank plywood paint primer brush roller caulk glue tape measure level sander sandpaper ladder toolbox socket blade tile grout cement concrete pipe fitting valve wire cable outlet switch breaker fuse hinge knob lock shelf bracket hook lightbulb bulb battery filter duct insulation drywall stain varnish clamp chisel ryobi makita dewalt bosch ozito stanley sikaflex selleys dulux taubmans cabots gorilla wd40 irwin bahco karcher mulch potting fertiliser fertilizer weedkiller roundup sprinkler hose",
   },
   {
     name: "electronics",
     aliases: "electronics electronic tech gadgets gadget jb jbhifi bestbuy harvey",
     vocabulary:
-      "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud speaker soundbar phone tablet camera webcam drone console controller router modem printer ssd harddrive drive ram memory gpu cpu processor motherboard case fan projector smartwatch fitbit kindle remote antenna surge protector powerbank sim stylus tripod microphone gopro chromecast roku firestick playstation xbox nintendo",
+      "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud speaker soundbar phone tablet camera webcam drone console controller router modem printer ssd harddrive drive ram memory gpu cpu processor motherboard case fan projector smartwatch fitbit kindle remote antenna surge protector powerbank sim stylus tripod microphone gopro chromecast roku firestick playstation xbox nintendo samsung apple sony jbl bose logitech sandisk seagate anker belkin tplink dlink asus acer lenovo dell brother epson canon airpods iphone ipad macbook pixel galaxy chromebook dyson dualsense",
   },
   {
     name: "stationery",
     aliases: "stationery officeworks office staples",
     vocabulary:
-      "pen pencil notebook notepad paper stapler staple envelope binder marker highlighter sharpie eraser ruler scissors clipboard diary planner calculator label sticker card cardstock ink toner cartridge printer laminate laminator whiteboard folder divider paperclip pin tack glue tape shredder",
+      "pen pencil notebook notepad paper stapler staple envelope binder marker highlighter sharpie eraser ruler scissors clipboard diary planner calculator label sticker card cardstock ink toner cartridge printer laminate laminator whiteboard folder divider paperclip pin tack shredder bic staedtler artline uhu bostik postit crayola texta derwent",
   },
   {
     name: "furniture",
@@ -68,13 +80,13 @@ const RAW: RawConcept[] = [
     name: "homewares",
     aliases: "homewares kmart target bigw",
     vocabulary:
-      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle lego doll craft wrapping ribbon balloon party hamper mat doormat clock",
+      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle lego doll craft wrapping ribbon balloon party hamper mat doormat clock sistema pyrex corelle tefal raco tupperware tontine",
   },
   {
     name: "clothing",
     aliases: "clothing clothes apparel fashion wardrobe uniqlo zara myer cottonon",
     vocabulary:
-      "shirt tshirt tee top pants jeans shorts jacket hoodie sweater jumper coat sock undies underwear boxer brief bra dress skirt suit tie belt shoe sneaker runner boot sandal thong scarf glove beanie hat cap pyjama legging singlet blazer cardigan trouser polo swimsuit swimmer trunks activewear uniform vest denim flannel raincoat slipper heel loafer",
+      "shirt tshirt tee top pants jeans shorts jacket hoodie sweater jumper coat sock undies underwear boxer brief bra dress skirt suit tie belt shoe sneaker runner boot sandal thong scarf glove beanie hat cap pyjama legging singlet blazer cardigan trouser polo swimsuit swimmer trunks activewear uniform vest denim flannel raincoat slipper heel loafer bonds champion adidas nike puma levis levi asics converse vans crocs ugg uggs",
   },
   {
     name: "computer",
@@ -92,7 +104,9 @@ const RAW: RawConcept[] = [
     name: "health",
     aliases: "health fitness gym medical wellness chemist pharmacy priceline",
     vocabulary:
-      "gym workout exercise run jog yoga pilate stretch cardio weight lift squat deadlift doctor dentist optometrist appointment checkup assessment screening scan referral specialist surgery prescription medicine pill vitamin supplement therapy therapist physio massage diet calorie protein sleep meditation hospital clinic vaccine blood test xray mri allergy flu injury recovery",
+      `gym workout exercise run jog yoga pilate stretch cardio weight lift squat deadlift doctor dentist optometrist appointment checkup assessment screening scan referral specialist surgery prescription medicine pill supplement therapy therapist physio massage diet calorie protein sleep meditation hospital clinic vaccine blood test xray mri allergy flu injury recovery ` +
+      // Chemist-shelf brands and products:
+      `codral telfast zyrtec claratyne gaviscon mylanta imodium hydralyte voltaren nicorette strepsils difflam vicks sudafed demazin otrivin canesten betadine elastoplast blackmores swisse ostelin cenovis qv cetaphil sukin neutrogena bepanthen sudocrem ${PERSONAL_CARE}`,
   },
   {
     name: "finance",

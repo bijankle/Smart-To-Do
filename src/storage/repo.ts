@@ -268,6 +268,7 @@ export class Repository {
   toggleBucket(id: string, bucket: string): void {
     const task = this.requireTask(id);
     const ts = this.now().toISOString();
+    task.manualTags = true;
     if (task.buckets.includes(bucket)) {
       task.buckets = task.buckets.filter((b) => b !== bucket);
       if (task.trainedBuckets.includes(bucket)) {
@@ -284,6 +285,26 @@ export class Repository {
       this.promoteBucket(bucket);
     }
     this.touch(task);
+  }
+
+  /**
+   * Re-apply auto-tagging to open, untagged tasks the user hasn't touched —
+   * the vocabulary grows over time, so yesterday's unrecognized "bandaids"
+   * can file itself today. Runs cheaply on every app start.
+   */
+  retagUntagged(): void {
+    let changed = false;
+    for (const task of Object.values(this.doc.tasks)) {
+      if (task.deletedAt !== null || task.done || task.manualTags) continue;
+      if (task.buckets.length > 0 || task.trainedBuckets.length > 0) continue;
+      const tags = this.autoTag(task.title);
+      if (tags.length > 0) {
+        task.buckets = tags;
+        task.modifiedAt = this.now().toISOString();
+        changed = true;
+      }
+    }
+    if (changed) this.scheduleSave();
   }
 
   // ---- manual ordering ---------------------------------------------------

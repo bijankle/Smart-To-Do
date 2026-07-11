@@ -34,6 +34,11 @@ export interface TaskRecord {
    * knows exactly what to untrain.
    */
   trainedBuckets: string[];
+  /**
+   * True once the user has hand-adjusted this task's tags — automatic
+   * re-tagging then leaves it alone (a removed tag must never come back).
+   */
+  manualTags?: boolean;
 }
 
 export interface BucketRecord {
