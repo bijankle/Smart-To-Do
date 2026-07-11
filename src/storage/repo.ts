@@ -219,6 +219,40 @@ export class Repository {
     return this.listBuckets().filter((name) => conceptForBucketName(name) === concept);
   }
 
+  /**
+   * Deterministic capture from a pasted link: buckets are set directly
+   * (the source says what it is — no classification, no training).
+   */
+  addLinkedTask(title: string, buckets: string[], link: string, info: Record<string, string>): TaskRecord {
+    const ts = this.now().toISOString();
+    const task: TaskRecord = {
+      id: this.newId(),
+      title: title.trim(),
+      buckets: buckets.filter((b) => this.isLiveBucket(b)),
+      done: false,
+      completedAt: null,
+      order: this.topOrder(),
+      createdAt: ts,
+      modifiedAt: ts,
+      deletedAt: null,
+      trainedBuckets: [],
+      link,
+      info,
+    };
+    this.doc.tasks[task.id] = task;
+    this.scheduleSave();
+    return task;
+  }
+
+  /** Attach or update enrichment (fetched title/info) on a linked task. */
+  attachInfo(id: string, updates: { title?: string; info?: Record<string, string>; link?: string }): void {
+    const task = this.requireTask(id);
+    if (updates.title) task.title = updates.title.trim();
+    if (updates.info) task.info = updates.info;
+    if (updates.link) task.link = updates.link;
+    this.touch(task);
+  }
+
   /** Live, OPEN tasks for a pill filter, sorted top-first. Completed tasks vanish from here. */
   listTasks(filter: TaskFilter = "all"): TaskRecord[] {
     return Object.values(this.doc.tasks)

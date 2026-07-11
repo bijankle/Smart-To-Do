@@ -21,11 +21,14 @@ import { WebStoragePersistence } from "../storage/persistence.js";
 import type { TaskRecord } from "../storage/doc.js";
 import { DriveSync } from "../sync/drive.js";
 import { lookupMediaConcepts } from "../sync/webcheck.js";
+import { fetchLinkInfo, parseMediaLink, titleCase, type MediaLink } from "../sync/linkinfo.js";
 
 let repo: Repository;
 let filter: TaskFilter = "all";
 let showCompleted = false;
 let drive: DriveSync | null = null;
+/** Task whose info callout is open (linked Books/Films tasks). */
+let openCalloutId: string | null = null;
 
 /** Just-ticked items stay visible this long (a shopping run) before tucking away. */
 const RECENT_COMPLETED_MS = 5 * 60_000;
@@ -84,6 +87,23 @@ const undoStack: CaptureEntry[] = [];
 const redoStack: CaptureEntry[] = [];
 
 function submitCapture(raw: string): void {
+  // Pasted Goodreads/IMDb links become enriched Books/Films tasks.
+  const media = parseMediaLink(raw);
+  if (media) {
+    const conceptName = media.kind === "goodreads" ? "books" : "films";
+    const buckets = repo.bucketsForConceptName(conceptName);
+    const placeholder = media.slugTitle
+      ? titleCase(media.slugTitle)
+      : media.kind === "goodreads"
+        ? "Goodreads book"
+        : "IMDb film";
+    const task = repo.addLinkedTask(placeholder, buckets, media.url, {});
+    undoStack.push({ text: raw, taskId: task.id });
+    render();
+    void enrichLinkedTask(task.id, media);
+    return;
+  }
+
   const tagMatch = TAG_PATTERN.exec(raw);
   const title = raw.replace(TAG_PATTERN, " ").replace(/\s+/g, " ").trim();
   if (!title) return;
@@ -99,6 +119,17 @@ function submitCapture(raw: string): void {
   undoStack.push({ text: raw, taskId: task.id });
   render();
   void webCheckUntagged();
+}
+
+async function enrichLinkedTask(taskId: string, media: MediaLink): Promise<void> {
+  const result = await fetchLinkInfo(media);
+  if (!result) return;
+  try {
+    repo.attachInfo(taskId, { title: result.title, info: result.info });
+  } catch {
+    return; // task deleted while we were fetching
+  }
+  render();
 }
 
 /**
@@ -311,8 +342,18 @@ function renderRow(task: TaskRecord): HTMLElement {
   const title = document.createElement("div");
   title.className = "row-title";
   title.textContent = task.title;
-  title.title = "Click to edit";
-  title.addEventListener("click", () => beginTitleEdit(title, task));
+  const hasInfo = Boolean(task.link || (task.info && Object.keys(task.info).length > 0));
+  if (hasInfo) {
+    title.classList.add("row-title-linked");
+    title.title = "Click for details";
+    title.addEventListener("click", () => {
+      openCalloutId = openCalloutId === task.id ? null : task.id;
+      render();
+    });
+  } else {
+    title.title = "Click to edit";
+    title.addEventListener("click", () => beginTitleEdit(title, task));
+  }
   body.append(title);
 
   row.append(check, body);
@@ -433,7 +474,10 @@ function renderList(): void {
         : `No tasks tagged “${filter}” yet.`;
     list.append(empty);
   } else {
-    for (const task of open) list.append(renderRow(task));
+    for (const task of open) {
+      list.append(renderRow(task));
+      if (task.id === openCalloutId) list.append(buildCallout(task));
+    }
     if (shownCompleted.length > 0) {
       const divider = document.createElement("div");
       divider.className = "list-divider";
@@ -452,6 +496,56 @@ function renderList(): void {
       Math.max(1000, oldest + RECENT_COMPLETED_MS - Date.now() + 250),
     );
   }
+}
+
+/** Blurprint-style callout with the linked task's key info. */
+function buildCallout(task: TaskRecord): HTMLElement {
+  const callout = document.createElement("div");
+  callout.className = "callout";
+
+  const heading = document.createElement("div");
+  heading.className = "callout-title";
+  heading.textContent = task.title;
+  callout.append(heading);
+
+  for (const [key, value] of Object.entries(task.info ?? {})) {
+    const line = document.createElement("div");
+    line.className = "callout-line";
+    const label = document.createElement("span");
+    label.className = "callout-key";
+    label.textContent = key;
+    const val = document.createElement("span");
+    val.textContent = value;
+    line.append(label, val);
+    callout.append(line);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "callout-actions";
+  if (task.link) {
+    const anchor = document.createElement("a");
+    anchor.className = "btn-ghost";
+    anchor.href = task.link;
+    anchor.target = "_blank";
+    anchor.rel = "noopener";
+    anchor.textContent = task.link.includes("goodreads") ? "Open on Goodreads ↗" : "Open on IMDb ↗";
+    actions.append(anchor);
+  }
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "btn-ghost";
+  edit.textContent = "Edit title";
+  edit.addEventListener("click", () => {
+    openCalloutId = null;
+    render();
+    const row = [...document.querySelectorAll<HTMLElement>(".row-title")].find(
+      (el) => el.textContent === task.title,
+    );
+    if (row) beginTitleEdit(row, task);
+  });
+  actions.append(edit);
+  callout.append(actions);
+  return callout;
 }
 
 function renderFooter(): void {

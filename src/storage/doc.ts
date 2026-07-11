@@ -39,6 +39,10 @@ export interface TaskRecord {
    * re-tagging then leaves it alone (a removed tag must never come back).
    */
   manualTags?: boolean;
+  /** Source URL for tasks created from a pasted link (Goodreads/IMDb). */
+  link?: string;
+  /** Key info shown in the title callout, e.g. { Author, Published, Pages }. */
+  info?: Record<string, string>;
 }
 
 export interface BucketRecord {
