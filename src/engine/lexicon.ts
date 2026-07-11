@@ -38,7 +38,7 @@ interface RawConcept {
  * Warehouse — the engine multi-tags whenever several concepts match.
  */
 const PERSONAL_CARE =
-  "condom lube lubricant bandaid bandage plaster gauze panadol paracetamol nurofen ibuprofen aspirin antiseptic dettol savlon tampon liner sanitary deodorant antiperspirant shampoo conditioner bodywash soap toothpaste toothbrush floss mouthwash listerine razor shave shaving gillette schick sunscreen aloe moisturiser moisturizer lotion balm vaseline tissue cotton swab wipe nappy nappies huggies babylove formula colgate sensodyne nivea dove rexona lynx berocca oil vitamin tweezer clipper emery loofah pumice qtip earplug nail powder cream gel aid firstaid kit hair comb hairbrush mask patch pimple acne wart blister inhaler electrolyte creatine epipen repellent face spray heat ear";
+  "condom lube lubricant bandaid bandage plaster gauze panadol paracetamol nurofen ibuprofen aspirin antiseptic dettol savlon tampon liner sanitary deodorant antiperspirant shampoo conditioner bodywash soap toothpaste toothbrush floss mouthwash listerine razor shave shaving gillette schick sunscreen aloe moisturiser moisturizer lotion balm vaseline tissue cotton swab wipe nappy nappies huggies babylove formula colgate sensodyne nivea dove rexona lynx berocca oil vitamin tweezer clipper emery loofah pumice qtip earplug nail powder cream gel aid firstaid kit hair comb hairbrush mask patch pimple acne wart blister inhaler electrolyte creatine epipen repellent face spray heat ear bronzer concealer foundation mascara eyeliner lipstick eyeshadow blush brow lash makeup remover polish perfume cologne aftershave fragrance dye";
 
 const RAW: RawConcept[] = [
   {
@@ -106,7 +106,7 @@ const RAW: RawConcept[] = [
     vocabulary:
       `gym workout exercise run jog yoga pilate stretch cardio weight lift squat deadlift doctor dentist optometrist appointment checkup assessment screening scan referral specialist surgery prescription medicine pill supplement therapy therapist physio massage diet calorie protein sleep meditation hospital clinic vaccine blood test xray mri allergy flu injury recovery ` +
       // Chemist-shelf brands and products:
-      `codral telfast zyrtec claratyne gaviscon mylanta imodium hydralyte voltaren nicorette strepsils difflam vicks sudafed demazin otrivin canesten betadine elastoplast blackmores swisse ostelin cenovis qv cetaphil sukin neutrogena bepanthen sudocrem bronzer concealer foundation mascara eyeliner lipstick eyeshadow blush brow lash makeup remover polish perfume cologne aftershave fragrance dye straightener curler curling hairdryer blowdryer antihistamine hayfever ventolin melatonin magnesium probiotic collagen retinol serum facial cleanser eye drop lens solution contact thermometer lozenge throat cough tablet capsule ointment ${PERSONAL_CARE}`,
+      `codral telfast zyrtec claratyne gaviscon mylanta imodium hydralyte voltaren nicorette strepsils difflam vicks sudafed demazin otrivin canesten betadine elastoplast blackmores swisse ostelin cenovis qv cetaphil sukin neutrogena bepanthen sudocrem straightener curler curling hairdryer blowdryer antihistamine hayfever ventolin melatonin magnesium probiotic collagen retinol serum facial cleanser eye drop lens solution contact thermometer lozenge throat cough tablet capsule ointment ${PERSONAL_CARE}`,
   },
   {
     name: "finance",
