@@ -296,6 +296,14 @@ body {
   color: var(--text-muted);
 }
 
+/* "More" drawer button: reveals buckets that aren't currently shown. */
+.pill-more {
+  color: var(--text-muted);
+}
+.pill-more .pill-count {
+  background: var(--gray-100);
+}
+
 /* Auto-generated bucket: dashed outline + hollow dot until the user adopts it. */
 .pill-generated {
   border-style: dashed;

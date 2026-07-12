@@ -193,6 +193,16 @@ function pill(
   return button;
 }
 
+/**
+ * A bucket earns a pill only while it has open tasks — or while it's the
+ * current filter, so selecting an empty one from the drawer doesn't make its
+ * pill vanish under you. Everything else (stores set up but never used, or
+ * used before and now cleared) lives in the "More" drawer.
+ */
+function isActiveBucket(name: string): boolean {
+  return filter === name || repo.listTasks(name).length > 0;
+}
+
 function renderPills(): void {
   const nav = $("#pills");
   nav.replaceChildren();
@@ -200,7 +210,10 @@ function renderPills(): void {
   nav.append(
     pill("All", repo.listTasks("all").length, { active: filter === "all" }, () => setFilter("all")),
   );
-  for (const bucket of repo.listBucketDetails()) {
+
+  const details = repo.listBucketDetails();
+  const inactive = details.filter((b) => !isActiveBucket(b.name));
+  for (const bucket of details.filter((b) => isActiveBucket(b.name))) {
     nav.append(
       pill(
         bucket.name,
@@ -221,6 +234,25 @@ function renderPills(): void {
         () => setFilter(bucket.name),
       ),
     );
+  }
+
+  // Drawer button: reveals every bucket that isn't currently shown.
+  if (inactive.length > 0) {
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "pill pill-more";
+    more.title = "Show your other lists";
+    const label = document.createElement("span");
+    label.textContent = "More";
+    const badge = document.createElement("span");
+    badge.className = "pill-count";
+    badge.textContent = String(inactive.length);
+    more.append(label, badge);
+    more.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openInactiveMenu(more, inactive);
+    });
+    nav.append(more);
   }
 
   const add = document.createElement("button");
@@ -385,6 +417,40 @@ function openTagMenu(anchor: HTMLElement, task: TaskRecord): void {
 
 function closeTagMenu(): void {
   document.getElementById("tag-menu")?.remove();
+}
+
+/**
+ * The "More" drawer: every bucket not currently shown as a pill — stores set
+ * up but never used, and lists used before that are now cleared. Picking one
+ * filters to it (its pill reappears while selected); a small count shows how
+ * many items were completed there, distinguishing past-used from never-used.
+ */
+function openInactiveMenu(anchor: HTMLElement, buckets: Array<{ name: string }>): void {
+  closeTagMenu();
+  const menu = document.createElement("div");
+  menu.className = "tag-menu";
+  menu.id = "tag-menu";
+
+  const hint = document.createElement("div");
+  hint.className = "tag-menu-hint";
+  hint.textContent = "Your other lists";
+  menu.append(hint);
+
+  for (const bucket of buckets) {
+    const done = repo.listCompleted(bucket.name).length;
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "tag-menu-item";
+    item.textContent = done > 0 ? `${bucket.name} · ${done} done` : bucket.name;
+    item.addEventListener("click", () => setFilter(bucket.name));
+    menu.append(item);
+  }
+
+  const rect = anchor.getBoundingClientRect();
+  menu.style.top = `${rect.bottom + window.scrollY + 6}px`;
+  menu.style.left = `${Math.max(8, rect.left + window.scrollX)}px`;
+  document.body.append(menu);
+  setTimeout(() => document.addEventListener("click", closeTagMenu, { once: true }));
 }
 
 function completedAtMs(t: TaskRecord): number {
