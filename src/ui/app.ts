@@ -20,15 +20,11 @@ import { Repository, type TaskFilter } from "../storage/repo.js";
 import { WebStoragePersistence } from "../storage/persistence.js";
 import type { TaskRecord } from "../storage/doc.js";
 import { DriveSync } from "../sync/drive.js";
-import { lookupMediaConcepts } from "../sync/webcheck.js";
-import { fetchLinkInfo, parseMediaLink, titleCase, type MediaLink } from "../sync/linkinfo.js";
 
 let repo: Repository;
 let filter: TaskFilter = "all";
 let showCompleted = false;
 let drive: DriveSync | null = null;
-/** Task whose info callout is open (linked Books/Films tasks). */
-let openCalloutId: string | null = null;
 
 /** Just-ticked items stay visible this long (a shopping run) before tucking away. */
 const RECENT_COMPLETED_MS = 5 * 60_000;
@@ -52,9 +48,6 @@ const MY_PILLS = [
   // Life categories
   "Medical",
   "Computer",
-  "Music",
-  "Films",
-  "Books",
 ];
 const GENERIC_REMAP: Record<string, string> = {
   groceries: "Coles",
@@ -68,8 +61,6 @@ const GENERIC_REMAP: Record<string, string> = {
 
 const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
-const OMDB_KEY = "smart-to-do/omdb-key";
-const TMDB_KEY = "smart-to-do/tmdb-key";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -89,38 +80,6 @@ const undoStack: CaptureEntry[] = [];
 const redoStack: CaptureEntry[] = [];
 
 function submitCapture(raw: string): void {
-  // Pasted Goodreads/IMDb/Spotify links (or share-sheet text) → enriched tasks.
-  const media = parseMediaLink(raw);
-  if (media && media.kind !== "link") {
-    const conceptName = mediaConcept(media);
-    const buckets = repo.bucketsForConceptName(conceptName);
-    // URL slugs are lowercase (title-case them); share text keeps its casing.
-    const placeholder = media.slugTitle
-      ? media.kind === "goodreads"
-        ? titleCase(media.slugTitle)
-        : media.slugTitle
-      : conceptName === "books"
-        ? "Goodreads book"
-        : conceptName === "films"
-          ? "IMDb film"
-          : "Spotify link";
-    const task = repo.addLinkedTask(placeholder, buckets, media.url, {});
-    undoStack.push({ text: raw, taskId: task.id });
-    render();
-    void enrichLinkedTask(task.id, media);
-    return;
-  }
-  if (media) {
-    // Any other URL: capture the surrounding text as the task, keep the link.
-    const title = media.slugTitle ?? new URL(media.url).hostname;
-    const task = repo.addTask(title);
-    repo.attachInfo(task.id, { link: media.url });
-    undoStack.push({ text: raw, taskId: task.id });
-    render();
-    void webCheckUntagged();
-    return;
-  }
-
   const tagMatch = TAG_PATTERN.exec(raw);
   const title = raw.replace(TAG_PATTERN, " ").replace(/\s+/g, " ").trim();
   if (!title) return;
@@ -135,110 +94,6 @@ function submitCapture(raw: string): void {
   }
   undoStack.push({ text: raw, taskId: task.id });
   render();
-  void webCheckUntagged();
-}
-
-/**
- * Heal tasks captured before share-text parsing existed: a plain task whose
- * title still contains an IMDb/Goodreads share becomes a proper linked task
- * (clean title, right bucket, callout), then enriches. One-shot per task.
- */
-function mediaConcept(media: MediaLink): "books" | "films" | "music" {
-  if (media.kind.startsWith("goodreads")) return "books";
-  if (media.kind.startsWith("spotify")) return "music";
-  return "films";
-}
-
-/** Which media concept a linked task belongs to, from its buckets. */
-function taskMediaConcept(task: TaskRecord): "books" | "films" | "music" | null {
-  for (const concept of ["films", "books", "music"] as const) {
-    const buckets = repo.bucketsForConceptName(concept);
-    if (task.buckets.some((b) => buckets.includes(b))) return concept;
-  }
-  return null;
-}
-
-/**
- * Re-enrich linked tasks whose info is empty — enrichment is a one-shot at
- * paste/heal time, so tasks created before richer data (or an OMDb key) got
- * a link but no details. Runs once per task per session; picks up the OMDb
- * key automatically.
- */
-const reEnriched = new Set<string>();
-function reEnrichLinkedTasks(): void {
-  if (!navigator.onLine) return;
-  for (const task of repo.listTasks("all")) {
-    if (!task.link || reEnriched.has(task.id)) continue;
-    const concept = taskMediaConcept(task);
-    const isEmpty = !task.info || Object.keys(task.info).length === 0;
-    // Re-fetch when the info is empty, or was produced by older enrichment
-    // logic (bump ENRICH_VERSION to force a one-time refresh of everything).
-    const stale = (task.enrichedV ?? 0) < ENRICH_VERSION;
-    if (!isEmpty && !stale) continue;
-    reEnriched.add(task.id);
-
-    let media = parseMediaLink(task.link);
-    if (!media || media.kind === "link") {
-      if (!concept) continue;
-      const kind =
-        concept === "films" ? "imdb-share" : concept === "books" ? "goodreads-share" : "spotify-share";
-      media = { kind, url: task.link, id: null, slugTitle: task.title, year: null };
-    } else if (!media.slugTitle) {
-      media = { ...media, slugTitle: task.title };
-    }
-    void enrichLinkedTask(task.id, media);
-  }
-}
-
-function healPlainMediaTasks(): void {
-  for (const task of repo.listTasks("all")) {
-    if (task.link) continue;
-    const media = parseMediaLink(task.title);
-    if (!media || media.kind === "link") continue;
-    const conceptName = mediaConcept(media);
-    const buckets = repo.bucketsForConceptName(conceptName);
-    const title =
-      media.slugTitle && media.kind === "goodreads"
-        ? titleCase(media.slugTitle)
-        : media.slugTitle ?? task.title;
-    repo.relinkMedia(task.id, title, buckets, media.url);
-    // Enrichment is handled by reEnrichLinkedTasks (runs next), which also
-    // picks up the OMDb key — no direct fetch here, to avoid a double call.
-  }
-}
-
-/** Bump when enrichment logic improves, to force a one-time re-fetch of all
- * linked tasks (e.g. the Spotify exact-artist fix, book synopsis fallback). */
-const ENRICH_VERSION = 4;
-
-async function enrichLinkedTask(taskId: string, media: MediaLink): Promise<void> {
-  const result = await fetchLinkInfo(media, fetch, localStorage.getItem(OMDB_KEY), localStorage.getItem(TMDB_KEY));
-  if (!result || Object.keys(result.info).length === 0) return;
-  try {
-    repo.attachInfo(taskId, { title: result.title, info: result.info, enrichedV: ENRICH_VERSION });
-  } catch {
-    return; // task deleted while we were fetching
-  }
-  render();
-}
-
-/**
- * Background reference check: untagged, untouched tasks get looked up in the
- * iTunes catalogue (music/films/books) and tagged if they're a known title.
- */
-const webChecked = new Set<string>();
-async function webCheckUntagged(): Promise<void> {
-  if (!navigator.onLine) return;
-  const candidates = repo
-    .listTasks("all")
-    .filter((t) => t.buckets.length === 0 && !t.manualTags && !webChecked.has(t.id))
-    .slice(0, 5);
-  for (const task of candidates) {
-    webChecked.add(task.id); // one lookup per task per session
-    const concepts = await lookupMediaConcepts(task.title);
-    const buckets = [...new Set(concepts.flatMap((c) => repo.bucketsForConceptName(c)))];
-    if (buckets.length > 0 && repo.setSuggestedTags(task.id, buckets)) render();
-  }
 }
 
 function handleCapture(event: SubmitEvent): void {
@@ -432,18 +287,8 @@ function renderRow(task: TaskRecord): HTMLElement {
   const title = document.createElement("div");
   title.className = "row-title";
   title.textContent = task.title;
-  const hasInfo = Boolean(task.link || (task.info && Object.keys(task.info).length > 0));
-  if (hasInfo) {
-    title.classList.add("row-title-linked");
-    title.title = "Click for details";
-    title.addEventListener("click", () => {
-      openCalloutId = openCalloutId === task.id ? null : task.id;
-      render();
-    });
-  } else {
-    title.title = "Click to edit";
-    title.addEventListener("click", () => beginTitleEdit(title, task));
-  }
+  title.title = "Click to edit";
+  title.addEventListener("click", () => beginTitleEdit(title, task));
   body.append(title);
 
   row.append(check, body);
@@ -566,7 +411,6 @@ function renderList(): void {
   } else {
     for (const task of open) {
       list.append(renderRow(task));
-      if (task.id === openCalloutId) list.append(buildCallout(task));
     }
     if (shownCompleted.length > 0) {
       const divider = document.createElement("div");
@@ -586,70 +430,6 @@ function renderList(): void {
       Math.max(1000, oldest + RECENT_COMPLETED_MS - Date.now() + 250),
     );
   }
-}
-
-/** Blurprint-style callout with the linked task's key info. */
-function buildCallout(task: TaskRecord): HTMLElement {
-  const callout = document.createElement("div");
-  callout.className = "callout";
-
-  const heading = document.createElement("div");
-  heading.className = "callout-title";
-  heading.textContent = task.title;
-  callout.append(heading);
-
-  // Synopsis spans full width; the rest are label/value rows.
-  const entries = Object.entries(task.info ?? {});
-  const synopsis = entries.find(([k]) => k === "Synopsis");
-  if (synopsis) {
-    const para = document.createElement("div");
-    para.className = "callout-synopsis";
-    para.textContent = synopsis[1];
-    callout.append(para);
-  }
-  for (const [key, value] of entries) {
-    if (key === "Synopsis") continue;
-    const line = document.createElement("div");
-    line.className = "callout-line";
-    const label = document.createElement("span");
-    label.className = "callout-key";
-    label.textContent = key;
-    const val = document.createElement("span");
-    val.textContent = value;
-    line.append(label, val);
-    callout.append(line);
-  }
-
-  const actions = document.createElement("div");
-  actions.className = "callout-actions";
-  if (task.link) {
-    const anchor = document.createElement("a");
-    anchor.className = "btn-ghost";
-    anchor.href = task.link;
-    anchor.target = "_blank";
-    anchor.rel = "noopener";
-    anchor.textContent = task.link.includes("goodreads")
-      ? "Open on Goodreads ↗"
-      : task.link.includes("spotify")
-        ? "Open in Spotify ↗"
-        : "Open on IMDb ↗";
-    actions.append(anchor);
-  }
-  const edit = document.createElement("button");
-  edit.type = "button";
-  edit.className = "btn-ghost";
-  edit.textContent = "Edit title";
-  edit.addEventListener("click", () => {
-    openCalloutId = null;
-    render();
-    const row = [...document.querySelectorAll<HTMLElement>(".row-title")].find(
-      (el) => el.textContent === task.title,
-    );
-    if (row) beginTitleEdit(row, task);
-  });
-  actions.append(edit);
-  callout.append(actions);
-  return callout;
 }
 
 function renderFooter(): void {
@@ -794,31 +574,6 @@ function initSyncControls(): void {
     })();
   });
 
-  // Optional OMDb key for the IMDb /10 rating in film callouts.
-  const omdbInput = $<HTMLInputElement>("#omdb-key");
-  omdbInput.value = localStorage.getItem(OMDB_KEY) ?? "";
-  $("#omdb-save-btn").addEventListener("click", () => {
-    const key = omdbInput.value.trim();
-    if (key) localStorage.setItem(OMDB_KEY, key);
-    else localStorage.removeItem(OMDB_KEY);
-    const status = $("#omdb-status");
-    status.textContent = key ? "Saved ✓ — new film links will show ratings" : "Cleared";
-    status.classList.remove("sync-status-error");
-  });
-
-  // Optional TMDb key — the richest film source (synopsis, /10 rating,
-  // runtime, genre, director), resolved straight from the IMDb id.
-  const tmdbInput = $<HTMLInputElement>("#tmdb-key");
-  tmdbInput.value = localStorage.getItem(TMDB_KEY) ?? "";
-  $("#tmdb-save-btn").addEventListener("click", () => {
-    const key = tmdbInput.value.trim();
-    if (key) localStorage.setItem(TMDB_KEY, key);
-    else localStorage.removeItem(TMDB_KEY);
-    const status = $("#tmdb-status");
-    status.textContent = key ? "Saved ✓ — film links will now use TMDb" : "Cleared";
-    status.classList.remove("sync-status-error");
-  });
-
   renderSyncUi();
 }
 
@@ -836,9 +591,6 @@ async function main(): Promise<void> {
   repo = await Repository.open(new WebStoragePersistence(window.localStorage));
   repo.applyStoreSetup(MY_PILLS, GENERIC_REMAP);
   repo.retagUntagged();
-  healPlainMediaTasks();
-  reEnrichLinkedTasks();
-  void webCheckUntagged();
   $("#capture").addEventListener("submit", handleCapture as EventListener);
   window.addEventListener("keydown", handleUndoKeys);
   initSyncControls();

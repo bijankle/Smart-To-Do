@@ -15,7 +15,7 @@
  */
 
 import { classify, createModel, ensureBucket, seed, train, untrain } from "../engine/classify.js";
-import { CONCEPTS, conceptForBucketName, matchConcepts, type Concept } from "../engine/lexicon.js";
+import { conceptForBucketName, matchConcepts, type Concept } from "../engine/lexicon.js";
 import { tokenize } from "../engine/tokenize.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD } from "../engine/parse.js";
 import {
@@ -91,16 +91,40 @@ export class Repository {
    */
   applyStoreSetup(stores: string[], remap: Record<string, string>): boolean {
     const version = this.doc.setupVersion ?? 0;
-    if (version >= 3) return false;
+    if (version >= 4) return false;
 
     if (version < 2) this.applyPillSetup(stores, remap);
-    // v3: concepts were restructured (e.g. Medical split from Chemist) — the
-    // classifier carries stale seeds, so rebuild it and refresh auto tags.
+    // v4: the media feature (songs/films/books) was removed — drop those pills
+    // and any tasks that only lived in them, then rebuild the classifier so its
+    // seeds match the current concepts and refresh auto tags.
+    if (version < 4) this.removeMediaFeature();
     this.rebuildClassifier();
     this.retagAuto();
-    this.doc.setupVersion = 3;
+    this.doc.setupVersion = 4;
     this.scheduleSave();
     return true;
+  }
+
+  /**
+   * Retire the songs/films/books feature: tombstone the Music/Films/Books
+   * pills and delete the media captures that lived only in them (or carried a
+   * source link). Tasks that also belong to a real bucket keep it, just losing
+   * the media membership when the bucket is deleted.
+   */
+  private removeMediaFeature(): void {
+    const media = new Set(["Music", "Films", "Books"]);
+    const ts = this.now().toISOString();
+    for (const task of Object.values(this.doc.tasks)) {
+      if (task.deletedAt !== null) continue;
+      const onlyMedia = task.buckets.length > 0 && task.buckets.every((b) => media.has(b));
+      if (task.link || onlyMedia) {
+        task.deletedAt = ts;
+        task.modifiedAt = ts;
+      }
+    }
+    for (const name of media) {
+      if (this.isLiveBucket(name)) this.deleteBucket(name);
+    }
   }
 
   private applyPillSetup(stores: string[], remap: Record<string, string>): void {
@@ -160,14 +184,13 @@ export class Repository {
 
   /**
    * Re-run auto-tagging on open tasks whose tags came purely from automation
-   * (never hand-tagged, never link-sourced). Only ever REPLACES tags when the
-   * fresh result is non-empty — background suggestions the lexicon can't
-   * reproduce (e.g. web-checked film titles) are left alone.
+   * (never hand-tagged). Only ever REPLACES tags when the fresh result is
+   * non-empty, so a task the current lexicon can't reproduce is left alone.
    */
   retagAuto(): void {
     let changed = false;
     for (const task of Object.values(this.doc.tasks)) {
-      if (task.deletedAt !== null || task.done || task.manualTags || task.link) continue;
+      if (task.deletedAt !== null || task.done || task.manualTags) continue;
       if (task.trainedBuckets.length > 0) continue;
       const tags = this.autoTag(task.title);
       if (tags.length === 0) continue;
@@ -180,27 +203,6 @@ export class Repository {
       }
     }
     if (changed) this.scheduleSave();
-  }
-
-  /** Live buckets mapped to a concept name (for the background web check). */
-  bucketsForConceptName(conceptName: string): string[] {
-    const concept = CONCEPTS.find((c) => c.name === conceptName);
-    return concept ? this.liveBucketsForConcept(concept) : [];
-  }
-
-  /**
-   * Apply background-suggested tags. Deliberately timid: only fires on live,
-   * open, still-untagged tasks the user has never hand-tagged.
-   */
-  setSuggestedTags(id: string, buckets: string[]): boolean {
-    const task = this.doc.tasks[id];
-    if (!task || task.deletedAt !== null || task.done) return false;
-    if (task.buckets.length > 0 || task.manualTags || task.trainedBuckets.length > 0) return false;
-    const live = buckets.filter((b) => this.isLiveBucket(b));
-    if (live.length === 0) return false;
-    task.buckets = live;
-    this.touch(task);
-    return true;
   }
 
   // ---- tasks -------------------------------------------------------------
@@ -276,59 +278,6 @@ export class Repository {
 
   private liveBucketsForConcept(concept: Concept): string[] {
     return this.listBuckets().filter((name) => conceptForBucketName(name) === concept);
-  }
-
-  /**
-   * Deterministic capture from a pasted link: buckets are set directly
-   * (the source says what it is — no classification, no training).
-   */
-  addLinkedTask(title: string, buckets: string[], link: string, info: Record<string, string>): TaskRecord {
-    const ts = this.now().toISOString();
-    const task: TaskRecord = {
-      id: this.newId(),
-      title: title.trim(),
-      buckets: buckets.filter((b) => this.isLiveBucket(b)),
-      done: false,
-      completedAt: null,
-      order: this.topOrder(),
-      createdAt: ts,
-      modifiedAt: ts,
-      deletedAt: null,
-      trainedBuckets: [],
-      link,
-      info,
-    };
-    this.doc.tasks[task.id] = task;
-    this.scheduleSave();
-    return task;
-  }
-
-  /** Attach or update enrichment (fetched title/info) on a linked task. */
-  attachInfo(
-    id: string,
-    updates: { title?: string; info?: Record<string, string>; link?: string; enrichedV?: number },
-  ): void {
-    const task = this.requireTask(id);
-    if (updates.title) task.title = updates.title.trim();
-    if (updates.info) task.info = updates.info;
-    if (updates.link) task.link = updates.link;
-    if (updates.enrichedV !== undefined) task.enrichedV = updates.enrichedV;
-    this.touch(task);
-  }
-
-  /**
-   * Convert an existing plain task into a linked media task in place — used
-   * to heal tasks captured before share-text parsing existed (the whole
-   * share string ended up as the title). Sets a clean title, the concept
-   * buckets, and the source link; enrichment then fills the info.
-   */
-  relinkMedia(id: string, title: string, buckets: string[], link: string): void {
-    const task = this.requireTask(id);
-    task.title = title.trim();
-    task.buckets = buckets.filter((b) => this.isLiveBucket(b));
-    task.link = link;
-    task.info = task.info ?? {};
-    this.touch(task);
   }
 
   /** Live, OPEN tasks for a pill filter, sorted top-first. Completed tasks vanish from here. */

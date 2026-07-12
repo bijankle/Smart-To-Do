@@ -185,7 +185,7 @@ describe("Repository — bespoke store setup", () => {
     assert.equal(repo.applyStoreSetup(STORES, REMAP), false);
   });
 
-  it("setup v3 rebuilds the classifier and re-tags stale auto tags", async () => {
+  it("setup migration rebuilds the classifier, re-tags stale auto tags, and drops the media feature", async () => {
     const persistence = new MemoryPersistence();
     const before = await Repository.open(persistence, makeOptions());
     before.applyStoreSetup([...STORES, "Medical", "Chemist Warehouse"], REMAP);
@@ -200,20 +200,32 @@ describe("Repository — bespoke store setup", () => {
       done: false, completedAt: null, order: 0, createdAt: ts, modifiedAt: ts,
       deletedAt: null, trainedBuckets: [],
     };
-    // A web-checked film tag the lexicon can't reproduce must survive.
+    // A media task (only bucket was Films) is removed with the feature.
     doc.tasks["film"] = {
       id: "film", title: "the matrix", buckets: ["Films"], done: false,
       completedAt: null, order: 1, createdAt: ts, modifiedAt: ts,
+      deletedAt: null, trainedBuckets: [], link: "https://www.imdb.com/title/tt0133093/",
+    };
+    // A grocery task that also happens to sit in Music keeps its real bucket.
+    doc.tasks["mixed"] = {
+      id: "mixed", title: "milk", buckets: ["Coles", "Music"], done: false,
+      completedAt: null, order: 2, createdAt: ts, modifiedAt: ts,
       deletedAt: null, trainedBuckets: [],
     };
     doc.buckets["Films"] = { name: "Films", createdAt: ts, modifiedAt: ts, deletedAt: null };
+    doc.buckets["Music"] = { name: "Music", createdAt: ts, modifiedAt: ts, deletedAt: null };
     doc.setupVersion = 2;
     await persistence.save(JSON.stringify(doc));
 
     const repo = await Repository.open(persistence, makeOptions(9_000_000));
     assert.equal(repo.applyStoreSetup([...STORES, "Medical", "Chemist Warehouse"], REMAP), true);
     assert.deepEqual(repo.getTask("stale")!.buckets, ["Medical"]);
-    assert.deepEqual(repo.getTask("film")!.buckets, ["Films"]);
+    // The media pills are gone and the media-only task with it.
+    assert.equal(repo.getTask("film"), null);
+    assert.ok(!repo.listBuckets().includes("Films"));
+    assert.ok(!repo.listBuckets().includes("Music"));
+    // The mixed task survives, minus the media membership.
+    assert.deepEqual(repo.getTask("mixed")!.buckets, ["Coles"]);
     assert.equal(repo.applyStoreSetup([...STORES, "Medical", "Chemist Warehouse"], REMAP), false);
   });
 

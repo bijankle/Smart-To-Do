@@ -39,11 +39,14 @@ export interface TaskRecord {
    * re-tagging then leaves it alone (a removed tag must never come back).
    */
   manualTags?: boolean;
-  /** Source URL for tasks created from a pasted link (Goodreads/IMDb). */
+  /**
+   * Legacy fields from the removed songs/films/books feature. No longer
+   * written; retained so documents synced from an older device deserialize
+   * cleanly and so the one-time setup migration can find and clear old media
+   * captures (which carried a `link`).
+   */
   link?: string;
-  /** Key info shown in the title callout, e.g. { Author, Published, Pages }. */
   info?: Record<string, string>;
-  /** Enrichment logic version that produced `info`; older stamps re-fetch. */
   enrichedV?: number;
 }
 

@@ -121,21 +121,20 @@ describe("Seed lexicon", () => {
     assert.deepEqual(repo.addTask("stapler and highlighters").buckets, ["Officeworks"]);
   });
 
-  it("covers the life categories: medical, computer, music, films, books", async () => {
-    assert.equal(conceptForBucketName("Music")?.name, "music");
-    assert.equal(conceptForBucketName("Films")?.name, "films");
-    assert.equal(conceptForBucketName("Books")?.name, "books");
+  it("covers the life categories: medical, computer", async () => {
     assert.equal(conceptForBucketName("Computer")?.name, "computer");
 
+    // The media concepts (music/films/books) were removed with the feature.
+    assert.equal(conceptForBucketName("Music"), null);
+    assert.equal(conceptForBucketName("Films"), null);
+    assert.equal(conceptForBucketName("Books"), null);
+
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
-    for (const b of ["Medical", "Computer", "Music", "Films", "Books"]) repo.createBucket(b);
+    for (const b of ["Medical", "Computer"]) repo.createBucket(b);
     assert.deepEqual(repo.addTask("book a dentist appointment").buckets, ["Medical"]);
     assert.deepEqual(repo.addTask("physio referral for my knee").buckets, ["Medical"]);
     assert.deepEqual(repo.addTask("do my tax return on mygov").buckets, ["Computer"]);
     assert.deepEqual(repo.addTask("backup photos and update drivers").buckets, ["Computer"]);
-    assert.deepEqual(repo.addTask("listen to the new flume album").buckets, ["Music"]);
-    assert.deepEqual(repo.addTask("watch that new marvel movie").buckets, ["Films"]);
-    assert.deepEqual(repo.addTask("read the new murakami novel").buckets, ["Books"]);
   });
 
   it("matches a decisive single word ('laptop')", () => {

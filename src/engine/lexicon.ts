@@ -92,25 +92,6 @@ const RAW: RawConcept[] = [
       "shirt tshirt tee top pants jeans chino shorts trackie trackies tracksuit jacket puffer hoodie sweater jumper coat sock jocks undies underwear boxer brief bra dress skirt suit tie belt shoe sneaker runner running boot sandal thong scarf glove beanie hat cap pyjama legging singlet thermal blazer cardigan trouser polo swimsuit swimmer trunks activewear uniform vest denim flannel linen raincoat slipper heel loafer bikini blouse camisole fleece gown robe lingerie nightie nightwear tights sweatshirt slacks poncho shawl pashmina sarong waistcoat overalls dungaree cufflink knickers trainer stocking swim swimming hoody sunglasses sunnies corset kaftan romper nightgown swimwear underpants undershirt underclothes cargo tankini kilt necktie bonds champion adidas nike puma levis levi asics converse vans crocs ugg uggs",
   },
   {
-    name: "music",
-    aliases: "music songs song playlists playlist spotify",
-    vocabulary:
-      "listen song album playlist track single artist band remix acoustic concert gig tune banger mixtape ep lyric dj cover podcast spotify soundcloud shazam vinyl rock jazz blues rap hiphop edm techno classical opera kpop pop indie metal folk reggae soul funk disco punk beyonce drake rihanna eminem coldplay radiohead beatles abba adele kanye weeknd sza kendrick lamar tupac metallica nirvana acdc oasis gorillaz flume skrillex impala lorde sia bjork hozier billie eilish dua lipa doja bruno",
-  },
-  {
-    name: "films",
-    aliases: "films film movies movie cinema watchlist tv shows",
-    vocabulary:
-      "watch movie film cinema hoyts trailer netflix binge stream streaming disney hbo imax documentary doco sequel prequel marvel pixar ghibli anime thriller horror romcom scifi comedy drama blockbuster oscar oscars director premiere rewatch flick biopic",
-  },
-  {
-    name: "books",
-    aliases: "books book reading library",
-    vocabularyExcludes: "book books",
-    vocabulary:
-      "read reading novel author paperback hardcover ebook audiobook audible kindle library borrow goodreads memoir biography autobiography fiction nonfiction fantasy mystery romance thriller trilogy manga comic textbook poetry anthology bestseller bookstore dymocks kobo",
-  },
-  {
     name: "computer",
     aliases: "computer computers pc digital online desk",
     vocabulary:
