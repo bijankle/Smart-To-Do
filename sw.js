@@ -4,14 +4,14 @@
  * cache only serves when the network is unavailable or slow (>4s) — i.e. in
  * a store aisle, which is exactly where offline support matters.
  */
-const CACHE = "smart-to-do-v11";
+const CACHE = "smart-to-do-v12";
 const SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./src/ui/theme.css?v=11",
-  "./src/ui/app.css?v=11",
-  "./dist/src/ui/app.js?v=11",
+  "./src/ui/theme.css?v=12",
+  "./src/ui/app.css?v=12",
+  "./dist/src/ui/app.js?v=12",
 ];
 
 self.addEventListener("install", (event) => {

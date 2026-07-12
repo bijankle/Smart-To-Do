@@ -64,7 +64,7 @@ const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v11 · bigger lexicon";
+const APP_VERSION = "v12 · nav + copy";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -521,6 +521,24 @@ function completedAtMs(t: TaskRecord): number {
   return Date.parse(t.completedAt ?? t.modifiedAt);
 }
 
+/** Two-column Markdown table of the given tasks: item | comma-listed categories. */
+function buildListTable(tasks: TaskRecord[]): string {
+  const cell = (s: string) => s.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
+  const rows = tasks.map((t) => `| ${cell(t.title)} | ${cell(t.buckets.join(", "))} |`);
+  return ["| Item | Categories |", "| --- | --- |", ...rows].join("\n");
+}
+
+/** Briefly show confirmation text on a button, then restore its label. */
+function flashButton(button: HTMLButtonElement, message: string): void {
+  const original = button.textContent;
+  button.textContent = message;
+  button.disabled = true;
+  window.setTimeout(() => {
+    button.textContent = original;
+    button.disabled = false;
+  }, 1400);
+}
+
 function renderList(): void {
   const list = $("#list");
   list.replaceChildren();
@@ -539,13 +557,27 @@ function renderList(): void {
         : `No tasks tagged “${filter}” yet.`;
     list.append(empty);
   } else {
-    // Clear-all bar, right-aligned above the top item (over the × column).
+    // Action bar, right-aligned above the top item (over the × column).
     if (open.length > 0) {
       const bar = document.createElement("div");
       bar.className = "list-actions";
+
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.className = "list-action copy-list";
+      copy.textContent = "Copy";
+      copy.title = "Copy this list as a table (item + categories)";
+      copy.addEventListener("click", () => {
+        void navigator.clipboard.writeText(buildListTable(open)).then(
+          () => flashButton(copy, "Copied ✓"),
+          () => flashButton(copy, "Copy failed"),
+        );
+      });
+      bar.append(copy);
+
       const clear = document.createElement("button");
       clear.type = "button";
-      clear.className = "clear-all";
+      clear.className = "list-action clear-all";
       clear.textContent = "Clear all";
       clear.title =
         filter === "all" ? "Delete every task" : `Clear all items from ${filter}`;
@@ -675,9 +707,10 @@ function initSyncControls(): void {
   }
 
   $("#settings-btn").addEventListener("click", () => {
-    const panel = $("#settings");
-    panel.hidden = !panel.hidden;
+    if ($("#settings").hidden) openSettings();
+    else closeSettings();
   });
+  $("#settings-back").addEventListener("click", closeSettings);
 
   $("#connect-btn").addEventListener("click", () => {
     const clientId = $<HTMLInputElement>("#client-id").value.trim();
@@ -733,6 +766,29 @@ function initSyncControls(): void {
   renderSyncUi();
 }
 
+// ---- settings navigation ---------------------------------------------------
+
+/**
+ * Settings opens as a history entry, so the phone's back gesture (and the
+ * back arrow) pop it and return to the list — without ever leaving the app.
+ */
+function openSettings(): void {
+  if (!$("#settings").hidden) return;
+  $("#settings").hidden = false;
+  history.pushState({ view: "settings" }, "");
+}
+
+function closeSettings(): void {
+  // Undo the history entry we pushed; popstate does the actual hiding.
+  if (!$("#settings").hidden) history.back();
+}
+
+/** The app logo is a Home button: leave settings and reset to the All view. */
+function goHome(): void {
+  closeSettings();
+  setFilter("all");
+}
+
 // ---- boot ------------------------------------------------------------------
 
 function render(): void {
@@ -752,6 +808,11 @@ async function main(): Promise<void> {
   $("#capture").addEventListener("submit", handleCapture as EventListener);
   $("#capture-input").addEventListener("keydown", handleCaptureKeydown as EventListener);
   $("#capture-input").addEventListener("input", autosizeCapture);
+  $("#app-logo").addEventListener("click", goHome);
+  // Back gesture / browser Back closes the settings screen (never leaves the app).
+  window.addEventListener("popstate", () => {
+    $("#settings").hidden = true;
+  });
   window.addEventListener("keydown", handleUndoKeys);
   initSyncControls();
   render();
