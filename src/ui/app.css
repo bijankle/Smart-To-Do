@@ -86,6 +86,11 @@ body {
   cursor: pointer;
 }
 
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .icon-btn:hover {
   background: var(--bg-hover);
 }

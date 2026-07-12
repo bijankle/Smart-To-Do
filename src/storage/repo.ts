@@ -556,9 +556,15 @@ export class Repository {
     this.scheduleSave();
   }
 
-  /** Snapshot for upload to a remote. */
+  /** Snapshot for upload to a remote, or for the undo/redo history. */
   exportDoc(): string {
     return serializeDoc(this.doc);
+  }
+
+  /** Replace the whole document with a snapshot (undo/redo). Persists it. */
+  restoreSnapshot(snapshot: string): void {
+    this.doc = deserializeDoc(snapshot);
+    this.scheduleSave();
   }
 
   /** Resolves when all scheduled saves have hit the persistence adapter. */

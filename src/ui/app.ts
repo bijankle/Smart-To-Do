@@ -63,7 +63,7 @@ const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v8 · clear all";
+const APP_VERSION = "v9 · undo redo";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -72,15 +72,43 @@ const $ = <T extends HTMLElement>(selector: string): T => document.querySelector
 const TAG_PATTERN = /(?:^|\s)#([\w-]+)/;
 
 /**
- * Capture undo/redo (Cmd+Z / Cmd+Y): undoing removes the captured task and
- * puts the original text back in the input for correction; redo re-captures.
+ * Snapshot-based undo/redo (buttons + Cmd+Z / Cmd+Y). Each user action records
+ * the whole document before it runs, so undo can revert ANYTHING — add, delete,
+ * complete, tag change, Clear all — not just captures.
  */
-interface CaptureEntry {
-  text: string;
-  taskId: string;
+const undoHistory: string[] = [];
+const redoHistory: string[] = [];
+const HISTORY_LIMIT = 50;
+
+/** Record the current state before a mutating action; call BEFORE the change. */
+function snapshot(): void {
+  undoHistory.push(repo.exportDoc());
+  if (undoHistory.length > HISTORY_LIMIT) undoHistory.shift();
+  redoHistory.length = 0; // a fresh action invalidates the redo trail
 }
-const undoStack: CaptureEntry[] = [];
-const redoStack: CaptureEntry[] = [];
+
+function undo(): void {
+  const prev = undoHistory.pop();
+  if (prev === undefined) return;
+  redoHistory.push(repo.exportDoc());
+  repo.restoreSnapshot(prev);
+  if (filter !== "all" && !repo.listBuckets().includes(filter)) filter = "all";
+  render();
+}
+
+function redo(): void {
+  const next = redoHistory.pop();
+  if (next === undefined) return;
+  undoHistory.push(repo.exportDoc());
+  repo.restoreSnapshot(next);
+  if (filter !== "all" && !repo.listBuckets().includes(filter)) filter = "all";
+  render();
+}
+
+function updateHistoryButtons(): void {
+  ($("#undo-btn") as HTMLButtonElement).disabled = undoHistory.length === 0;
+  ($("#redo-btn") as HTMLButtonElement).disabled = redoHistory.length === 0;
+}
 
 /** Add a single task from one line of capture text (no newlines expected). */
 function captureOne(raw: string): void {
@@ -88,15 +116,13 @@ function captureOne(raw: string): void {
   const title = raw.replace(TAG_PATTERN, " ").replace(/\s+/g, " ").trim();
   if (!title) return;
 
-  let task;
   if (tagMatch) {
     const tag = tagMatch[1]!;
     if (!repo.listBuckets().includes(tag)) repo.createBucket(tag);
-    task = repo.addTask(title, tag);
+    repo.addTask(title, tag);
   } else {
-    task = repo.addTask(title);
+    repo.addTask(title);
   }
-  undoStack.push({ text: raw, taskId: task.id });
 }
 
 /**
@@ -107,6 +133,7 @@ function captureOne(raw: string): void {
 function submitCapture(raw: string): void {
   const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (lines.length === 0) return;
+  snapshot();
   for (const line of lines) captureOne(line);
   render();
 }
@@ -123,7 +150,6 @@ function handleCapture(event: SubmitEvent): void {
   const input = $<HTMLTextAreaElement>("#capture-input");
   const raw = input.value.trim();
   if (!raw) return;
-  redoStack.length = 0; // a fresh capture invalidates the redo history
   submitCapture(raw);
   input.value = "";
   autosizeCapture();
@@ -142,49 +168,24 @@ function handleCaptureKeydown(event: KeyboardEvent): void {
   }
 }
 
-function undoCapture(): void {
-  const entry = undoStack.pop();
-  if (!entry) return;
-  try {
-    repo.deleteTask(entry.taskId);
-  } catch {
-    /* already gone (deleted or synced away) — restoring the text still helps */
-  }
-  redoStack.push(entry);
-  const input = $<HTMLTextAreaElement>("#capture-input");
-  input.value = entry.text;
-  render();
-  input.focus();
-  input.setSelectionRange(input.value.length, input.value.length);
-  autosizeCapture();
-}
-
-function redoCapture(): void {
-  const entry = redoStack.pop();
-  if (!entry) return;
-  submitCapture(entry.text);
-  $<HTMLTextAreaElement>("#capture-input").value = "";
-  autosizeCapture();
-}
-
 function handleUndoKeys(event: KeyboardEvent): void {
   if (!(event.metaKey || event.ctrlKey)) return;
   // Don't hijack undo while the user is editing a task title or a form field
   // other than the capture box — let the browser's native text undo work.
   const active = document.activeElement;
   if (
-    ((active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
-      active.id !== "capture-input")
+    (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
+    active.id !== "capture-input"
   ) {
     return;
   }
   const key = event.key.toLowerCase();
   if (key === "z" && !event.shiftKey) {
     event.preventDefault();
-    undoCapture();
+    undo();
   } else if (key === "y" || (key === "z" && event.shiftKey)) {
     event.preventDefault();
-    redoCapture();
+    redo();
   }
 }
 
@@ -264,6 +265,7 @@ function renderPills(): void {
               `Delete the “${bucket.name}” tag? Tasks keep their other tags.`,
             );
             if (!ok) return;
+            snapshot();
             repo.deleteBucket(bucket.name);
             filter = "all";
             render();
@@ -309,7 +311,10 @@ function renderPills(): void {
       if (settled) return;
       settled = true;
       const name = input.value.trim();
-      if (create && name) repo.createBucket(name);
+      if (create && name) {
+        snapshot();
+        repo.createBucket(name);
+      }
       render();
     };
     input.addEventListener("keydown", (e) => {
@@ -348,6 +353,7 @@ function renderRow(task: TaskRecord): HTMLElement {
   check.title = task.done ? "Mark as not done" : "Mark as done";
   check.textContent = task.done ? "✓" : "";
   check.addEventListener("click", () => {
+    snapshot();
     repo.setDone(task.id, !task.done);
     render();
   });
@@ -383,6 +389,7 @@ function renderRow(task: TaskRecord): HTMLElement {
   }
   row.append(
     iconButton("row-delete", "×", "Delete", () => {
+      snapshot();
       repo.deleteTask(task.id);
       render();
     }),
@@ -406,6 +413,7 @@ function beginTitleEdit(el: HTMLElement, task: TaskRecord): void {
     const text = input.value.trim();
     if (save && text && text !== task.title) {
       try {
+        snapshot();
         repo.renameTask(task.id, text);
       } catch {
         /* task vanished mid-edit (e.g. synced away) — just re-render */
@@ -434,6 +442,7 @@ function openTagMenu(anchor: HTMLElement, task: TaskRecord): void {
     item.className = member ? "tag-menu-item tag-menu-active" : "tag-menu-item";
     item.textContent = member ? `✓ ${bucket}` : bucket;
     item.addEventListener("click", () => {
+      snapshot();
       repo.toggleBucket(task.id, bucket);
       render();
     });
@@ -525,7 +534,8 @@ function renderList(): void {
         filter === "all" ? "Delete every task" : `Clear all items from ${filter}`;
       clear.addEventListener("click", () => {
         const what = filter === "all" ? "all tasks" : `all items in “${filter}”`;
-        if (!window.confirm(`Clear ${what}? This can’t be undone.`)) return;
+        if (!window.confirm(`Clear ${what}?`)) return;
+        snapshot();
         repo.clearFilter(filter);
         render();
       });
@@ -585,6 +595,7 @@ function renderFooter(): void {
   clear.className = "btn-ghost btn-ghost-danger";
   clear.textContent = "Clear completed";
   clear.addEventListener("click", () => {
+    snapshot();
     for (const task of completed) repo.deleteTask(task.id);
     render();
   });
@@ -674,6 +685,9 @@ function initSyncControls(): void {
 
   $("#app-version").textContent = APP_VERSION;
 
+  $("#undo-btn").addEventListener("click", undo);
+  $("#redo-btn").addEventListener("click", redo);
+
   // Force update: drop the service worker + code caches and reload. Tasks
   // live in localStorage and are untouched; only the cached shell is cleared.
   $("#force-update-btn").addEventListener("click", () => {
@@ -710,6 +724,7 @@ function render(): void {
   renderList();
   renderFooter();
   renderSyncUi();
+  updateHistoryButtons();
 }
 
 async function main(): Promise<void> {
