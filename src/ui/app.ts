@@ -108,29 +108,35 @@ function submitCapture(raw: string): void {
   render();
 }
 
+/** Shrink/grow the capture box to fit its content (so a pasted list is visible). */
+function autosizeCapture(): void {
+  const input = $<HTMLTextAreaElement>("#capture-input");
+  input.style.height = "auto";
+  input.style.height = `${input.scrollHeight}px`;
+}
+
 function handleCapture(event: SubmitEvent): void {
   event.preventDefault();
-  const input = $<HTMLInputElement>("#capture-input");
+  const input = $<HTMLTextAreaElement>("#capture-input");
   const raw = input.value.trim();
   if (!raw) return;
   redoStack.length = 0; // a fresh capture invalidates the redo history
   submitCapture(raw);
   input.value = "";
+  autosizeCapture();
 }
 
 /**
- * A single-line <input> silently turns pasted newlines into spaces, so a
- * multi-line paste would arrive as one blob. Intercept it here — while the
- * line breaks still exist — and file each line as its own task. Single-line
- * pastes fall through to normal typing so the user can edit before adding.
+ * The capture box is a <textarea>, so a pasted list keeps its line breaks in
+ * the value and submitCapture files one task per line — reliably, on every
+ * platform, without depending on catching the paste event. Enter submits;
+ * Shift+Enter inserts a newline for building a multi-item list by hand.
  */
-function handlePaste(event: ClipboardEvent): void {
-  const text = event.clipboardData?.getData("text") ?? "";
-  if (!/\r?\n/.test(text.trim())) return;
-  event.preventDefault();
-  redoStack.length = 0;
-  submitCapture(text);
-  $<HTMLInputElement>("#capture-input").value = "";
+function handleCaptureKeydown(event: KeyboardEvent): void {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    ($("#capture") as HTMLFormElement).requestSubmit();
+  }
 }
 
 function undoCapture(): void {
@@ -142,18 +148,20 @@ function undoCapture(): void {
     /* already gone (deleted or synced away) — restoring the text still helps */
   }
   redoStack.push(entry);
-  const input = $<HTMLInputElement>("#capture-input");
+  const input = $<HTMLTextAreaElement>("#capture-input");
   input.value = entry.text;
   render();
   input.focus();
   input.setSelectionRange(input.value.length, input.value.length);
+  autosizeCapture();
 }
 
 function redoCapture(): void {
   const entry = redoStack.pop();
   if (!entry) return;
   submitCapture(entry.text);
-  $<HTMLInputElement>("#capture-input").value = "";
+  $<HTMLTextAreaElement>("#capture-input").value = "";
+  autosizeCapture();
 }
 
 function handleUndoKeys(event: KeyboardEvent): void {
@@ -162,8 +170,8 @@ function handleUndoKeys(event: KeyboardEvent): void {
   // other than the capture box — let the browser's native text undo work.
   const active = document.activeElement;
   if (
-    (active instanceof HTMLInputElement && active.id !== "capture-input") ||
-    active instanceof HTMLTextAreaElement
+    ((active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
+      active.id !== "capture-input")
   ) {
     return;
   }
@@ -685,11 +693,12 @@ async function main(): Promise<void> {
   repo.applyStoreSetup(MY_PILLS, GENERIC_REMAP);
   repo.retagUntagged();
   $("#capture").addEventListener("submit", handleCapture as EventListener);
-  $("#capture-input").addEventListener("paste", handlePaste as EventListener);
+  $("#capture-input").addEventListener("keydown", handleCaptureKeydown as EventListener);
+  $("#capture-input").addEventListener("input", autosizeCapture);
   window.addEventListener("keydown", handleUndoKeys);
   initSyncControls();
   render();
-  $<HTMLInputElement>("#capture-input").focus();
+  $<HTMLTextAreaElement>("#capture-input").focus();
 
   // Offline support when hosted (skipped during local development). Reload
   // once when a new service worker takes control, so updated code lands

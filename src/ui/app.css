@@ -173,19 +173,24 @@ body {
   display: flex;
   gap: 10px;
   margin-bottom: 18px;
+  align-items: flex-start;
 }
 
 .capture-input {
   flex: 1;
-  height: var(--control-height);
-  padding: 0 14px;
+  min-height: var(--control-height);
+  max-height: 40vh;
+  padding: 10px 14px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   background: var(--bg);
   font-size: 15px;
+  line-height: 1.5;
   font-family: inherit;
   color: var(--text);
   outline: none;
+  resize: none;
+  overflow-y: auto;
 }
 
 .capture-input:focus {
