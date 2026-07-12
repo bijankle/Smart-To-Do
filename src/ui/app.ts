@@ -768,6 +768,31 @@ function initSyncControls(): void {
 
   $("#sync-btn").addEventListener("click", () => void doSync(true));
 
+  // Force update: drop the service worker + code caches and reload. Tasks
+  // live in localStorage and are untouched; only the cached shell is cleared.
+  $("#force-update-btn").addEventListener("click", () => {
+    const status = $("#update-status");
+    status.textContent = "Updating…";
+    status.classList.remove("sync-status-error");
+    void (async () => {
+      try {
+        await repo.flush();
+        if ("serviceWorker" in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map((r) => r.unregister()));
+        }
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+      } catch {
+        /* best effort — reload regardless */
+      }
+      // Cache-bust the reload so the browser refetches the shell.
+      location.replace(location.pathname + "?v=" + String(Date.now()));
+    })();
+  });
+
   // Optional OMDb key for the IMDb /10 rating in film callouts.
   const omdbInput = $<HTMLInputElement>("#omdb-key");
   omdbInput.value = localStorage.getItem(OMDB_KEY) ?? "";
