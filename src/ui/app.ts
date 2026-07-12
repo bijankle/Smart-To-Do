@@ -208,7 +208,7 @@ function healPlainMediaTasks(): void {
 
 /** Bump when enrichment logic improves, to force a one-time re-fetch of all
  * linked tasks (e.g. the Spotify exact-artist fix, book synopsis fallback). */
-const ENRICH_VERSION = 2;
+const ENRICH_VERSION = 3;
 
 async function enrichLinkedTask(taskId: string, media: MediaLink): Promise<void> {
   const result = await fetchLinkInfo(media, fetch, localStorage.getItem(OMDB_KEY));

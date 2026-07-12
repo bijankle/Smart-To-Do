@@ -132,68 +132,59 @@ function formatTrackLength(ms?: number): string | null {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-interface GoogleBookVolume {
-  volumeInfo?: {
-    title?: string;
-    authors?: string[];
-    publishedDate?: string;
-    pageCount?: number;
-    averageRating?: number;
-    categories?: string[];
-    description?: string;
-  };
+interface OpenLibraryDoc {
+  title?: string;
+  author_name?: string[];
+  first_publish_year?: number;
+  number_of_pages_median?: number;
+  ratings_average?: number;
+  key?: string; // "/works/OL82563W"
 }
 
+/**
+ * Book info from Open Library (CORS-enabled, keyless — unlike Google Books,
+ * which blocks browser requests). Search gives author/year/pages/rating; a
+ * second call to the work fetches the description (synopsis).
+ */
 async function fetchBookInfo(link: MediaLink, fetchFn: typeof fetch): Promise<LinkInfo | null> {
   const query = link.slugTitle;
   if (!query) return null;
-  // Google Books is keyless for basic search and carries description + rating.
   const url =
-    "https://www.googleapis.com/books/v1/volumes?maxResults=5&country=AU&q=" +
+    "https://openlibrary.org/search.json?limit=5&fields=title,author_name," +
+    "first_publish_year,number_of_pages_median,ratings_average,key&q=" +
     encodeURIComponent(query);
   const response = await fetchFn(url);
   if (!response.ok) return null;
-  const data = (await response.json()) as { items?: GoogleBookVolume[] };
-  const items = data.items ?? [];
+  const docs = ((await response.json()) as { docs?: OpenLibraryDoc[] }).docs ?? [];
   const target = normalize(query);
-  const matches = (it: GoogleBookVolume) => {
-    const t = normalize(it.volumeInfo?.title);
-    return t.length > 0 && (target.includes(t) || t.includes(target));
-  };
-  // Prefer a title-matching edition that actually carries a description, so
-  // the synopsis isn't dropped just because the first edition lacks one.
-  const pick =
-    items.find((it) => matches(it) && it.volumeInfo?.description) ??
-    items.find((it) => it.volumeInfo?.description) ??
-    items.find(matches) ??
-    items[0];
-  const v = pick?.volumeInfo;
-  if (!v) return null;
-
-  // Pull the best available metadata across editions (some fields live on
-  // different editions than the description).
-  const anyBy = <T>(get: (vi: NonNullable<GoogleBookVolume["volumeInfo"]>) => T | undefined): T | undefined => {
-    for (const it of [pick, ...items]) {
-      const val = it.volumeInfo && get(it.volumeInfo);
-      if (val !== undefined && val !== null && (!Array.isArray(val) || val.length > 0)) return val;
-    }
-    return undefined;
-  };
+  const doc =
+    docs.find((d) => {
+      const t = normalize(d.title);
+      return t.length > 0 && (target.includes(t) || t.includes(target));
+    }) ?? docs[0];
+  if (!doc) return null;
 
   const info: Record<string, string> = {};
-  const authors = anyBy((vi) => vi.authors);
-  if (authors?.length) info["Author"] = authors.slice(0, 2).join(", ");
-  const published = anyBy((vi) => vi.publishedDate);
-  if (published) info["Published"] = published.slice(0, 4);
-  const pages = anyBy((vi) => vi.pageCount);
-  if (pages) info["Pages"] = String(pages);
-  const rating = anyBy((vi) => vi.averageRating);
-  if (rating) info["Rating"] = `${rating.toFixed(1)} / 5`;
-  const categories = anyBy((vi) => vi.categories);
-  if (categories?.length) info["Genre"] = categories[0]!;
-  const synopsis = trimSynopsis(v.description ?? anyBy((vi) => vi.description));
-  if (synopsis) info["Synopsis"] = synopsis;
-  return { title: v.title ?? titleCase(query), info };
+  if (doc.author_name?.length) info["Author"] = doc.author_name.slice(0, 2).join(", ");
+  if (doc.first_publish_year) info["Published"] = String(doc.first_publish_year);
+  if (doc.number_of_pages_median) info["Pages"] = String(doc.number_of_pages_median);
+  if (doc.ratings_average) info["Rating"] = `${doc.ratings_average.toFixed(1)} / 5`;
+
+  // Second call: the work's description is the synopsis.
+  if (doc.key) {
+    try {
+      const workRes = await fetchFn(`https://openlibrary.org${doc.key}.json`);
+      if (workRes.ok) {
+        const work = (await workRes.json()) as { description?: string | { value?: string } };
+        const desc = typeof work.description === "string" ? work.description : work.description?.value;
+        const synopsis = trimSynopsis(desc);
+        if (synopsis) info["Synopsis"] = synopsis;
+      }
+    } catch {
+      /* description is a bonus — keep the rest */
+    }
+  }
+  return { title: doc.title ?? titleCase(query), info };
 }
 
 /** Wikipedia REST summary (CORS-enabled) → synopsis + canonical title. */
@@ -403,11 +394,76 @@ async function musicBySpotifyUrl(link: MediaLink, fetchFn: typeof fetch): Promis
   return songInfo((await detail.json()) as MbRecording);
 }
 
-/** Music info from MusicBrainz (CORS-enabled, keyless). */
+interface OdesliEntity {
+  type?: string; // "song" | "album"
+  title?: string;
+  artistName?: string;
+}
+
+/**
+ * Odesli / song.link (CORS-enabled, keyless): turns a Spotify URL into the
+ * EXACT title + artist — the reliable way to know "Sunsets" is Powderfinger's,
+ * which neither the oEmbed (title only) nor a name search can tell us.
+ */
+async function odesliEntity(url: string, fetchFn: typeof fetch): Promise<OdesliEntity | null> {
+  const endpoint = "https://api.song.link/v1-alpha.1/links?userCountry=AU&url=" + encodeURIComponent(url);
+  const r = await fetchFn(endpoint);
+  if (!r.ok) return null;
+  const data = (await r.json()) as {
+    entityUniqueId?: string;
+    entitiesByUniqueId?: Record<string, OdesliEntity>;
+  };
+  const main = data.entityUniqueId ? data.entitiesByUniqueId?.[data.entityUniqueId] : undefined;
+  return main?.title ? main : null;
+}
+
+/** MusicBrainz recording matched precisely by title AND artist. */
+async function mbRecordingByTitleArtist(title: string, artist: string, fetchFn: typeof fetch): Promise<MbRecording | null> {
+  const q = encodeURIComponent(`recording:"${title}" AND artist:"${artist}"`);
+  const r = await fetchFn(`${MB}/recording?query=${q}&fmt=json&limit=5`);
+  if (!r.ok) return null;
+  const recs = ((await r.json()) as { recordings?: MbRecording[] }).recordings ?? [];
+  const t = normalize(title);
+  const a = normalize(artist);
+  return (
+    recs.find(
+      (x) =>
+        normalize(x.title) === t &&
+        x["artist-credit"]?.some((c) => {
+          const n = normalize(c.name);
+          return n.includes(a) || a.includes(n);
+        }),
+    ) ?? recs[0] ?? null
+  );
+}
+
+/** Music info. Odesli resolves Spotify links to the exact title+artist. */
 async function fetchMusicInfo(link: MediaLink, fetchFn: typeof fetch): Promise<LinkInfo | null> {
   const entity = link.entity ?? "track";
 
-  // For a real Spotify link, resolve the exact entity by its URL first.
+  // Spotify link → Odesli for the exact title + artist, then MusicBrainz for
+  // album/length/year (now a precise title+artist match, not a guess).
+  if (link.url && /open\.spotify\.com/.test(link.url) && entity !== "artist") {
+    const od = await odesliEntity(link.url, fetchFn);
+    if (od?.title) {
+      const info: Record<string, string> = { Type: od.type === "album" ? "Album" : "Song" };
+      if (od.artistName) info["Artist"] = od.artistName;
+      if (od.type !== "album" && od.artistName) {
+        const rec = await mbRecordingByTitleArtist(od.title, od.artistName, fetchFn);
+        if (rec) {
+          const album = rec.releases?.find((r) => r.title)?.title;
+          if (album) info["Album"] = album;
+          const year = rec["first-release-date"]?.slice(0, 4) ?? rec.releases?.[0]?.date?.slice(0, 4);
+          if (year) info["Released"] = year;
+          const length = formatTrackLength(rec.length);
+          if (length) info["Length"] = length;
+        }
+      }
+      return { title: od.title, info };
+    }
+  }
+
+  // Fallback: resolve the exact entity by its Spotify URL relationship in MB.
   if (link.url && /open\.spotify\.com/.test(link.url)) {
     const exact = await musicBySpotifyUrl(link, fetchFn);
     if (exact) return exact;

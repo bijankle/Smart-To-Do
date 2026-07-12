@@ -21,25 +21,20 @@ describe("Pasted media links", () => {
     assert.equal(titleCase("project hail mary"), "Project Hail Mary");
   });
 
-  it("enriches a Goodreads link from Google Books (synopsis, pages, rating)", async () => {
-    const fakeFetch = (async () => ({
-      ok: true,
-      json: async () => ({
-        items: [
-          {
-            volumeInfo: {
-              title: "Project Hail Mary",
-              authors: ["Andy Weir"],
-              publishedDate: "2021-05-04",
-              pageCount: 476,
-              averageRating: 4.5,
-              categories: ["Fiction / Science Fiction"],
-              description: "Ryland Grace is the sole survivor on a desperate mission. If he fails, humanity and Earth itself will perish. Except he can't remember why he's there.",
-            },
-          },
-        ],
-      }),
-    })) as unknown as typeof fetch;
+  it("enriches a Goodreads link from Open Library (synopsis, pages, rating)", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("/search.json")) {
+        return { ok: true, json: async () => ({ docs: [
+          { title: "Project Hail Mary", author_name: ["Andy Weir"], first_publish_year: 2021,
+            number_of_pages_median: 476, ratings_average: 4.5, key: "/works/OL20853433W" },
+        ] }) } as Response;
+      }
+      // Work detail → description (synopsis).
+      return { ok: true, json: async () => ({
+        description: "Ryland Grace is the sole survivor on a desperate mission. If he fails, humanity and Earth itself will perish. Except he can't remember why he's there.",
+      }) } as Response;
+    }) as unknown as typeof fetch;
 
     const link = parseMediaLink("https://goodreads.com/book/show/54493401-project-hail-mary")!;
     const result = await fetchLinkInfo(link, fakeFetch);
@@ -51,12 +46,20 @@ describe("Pasted media links", () => {
     assert.ok(result?.info["Synopsis"]?.includes("Ryland Grace"));
   });
 
-  it("skips a description-less edition to find one with a synopsis", async () => {
-    const fakeFetch = (async () => ({ ok: true, json: async () => ({ items: [
-      { volumeInfo: { title: "Harry Potter and the Chamber of Secrets", authors: ["J.K. Rowling"] } },
-      { volumeInfo: { title: "Harry Potter and the Chamber of Secrets", pageCount: 341, averageRating: 4.4,
-        description: "Harry returns to Hogwarts for a second year, only for a dark force to petrify students." } },
-    ] }) })) as unknown as typeof fetch;
+  it("reads the synopsis from an Open Library description object", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("/search.json")) {
+        return { ok: true, json: async () => ({ docs: [
+          { title: "Harry Potter and the Chamber of Secrets", author_name: ["J.K. Rowling"],
+            number_of_pages_median: 341, ratings_average: 4.4, key: "/works/OL82586W" },
+        ] }) } as Response;
+      }
+      // Open Library sometimes returns description as { type, value }.
+      return { ok: true, json: async () => ({
+        description: { type: "/type/text", value: "Harry returns to Hogwarts for a second year, only for a dark force to petrify students." },
+      }) } as Response;
+    }) as unknown as typeof fetch;
     const link = parseMediaLink("https://goodreads.com/book/show/15881-harry-potter-and-the-chamber-of-secrets")!;
     const result = await fetchLinkInfo(link, fakeFetch);
     assert.ok(result?.info["Synopsis"]?.includes("Hogwarts"));
@@ -179,37 +182,43 @@ describe("Pasted media links", () => {
     assert.ok(/bohemian rhapsody/i.test(share!.slugTitle ?? ""));
   });
 
-  it("resolves the EXACT Spotify track via MusicBrainz URL lookup (not fuzzy title)", async () => {
+  it("resolves the EXACT Spotify track via Odesli, then MusicBrainz by title+artist", async () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       const u = String(input);
-      if (u.includes("/url?resource=")) {
-        // URL relationship → the exact recording id.
-        return { ok: true, json: async () => ({ relations: [{ recording: { id: "rec-123", title: "Sunsets" } }] }) } as Response;
+      if (u.includes("song.link")) {
+        // Odesli gives the exact title + artist from the Spotify URL.
+        return { ok: true, json: async () => ({
+          entityUniqueId: "SPOTIFY_SONG::1dXFZeIjgDJ8sAc1csFNY2",
+          entitiesByUniqueId: { "SPOTIFY_SONG::1dXFZeIjgDJ8sAc1csFNY2": {
+            type: "song", title: "Sunsets", artistName: "Powderfinger" } },
+        }) } as Response;
       }
-      if (u.includes("/recording/rec-123")) {
-        return { ok: true, json: async () => ({ title: "Sunsets", length: 287_000,
+      if (u.includes("/recording?query=")) {
+        // Precise title+artist match fills in album/year/length.
+        return { ok: true, json: async () => ({ recordings: [{ title: "Sunsets", length: 287_000,
           "artist-credit": [{ name: "Powderfinger" }], "first-release-date": "2011-01-01",
-          releases: [{ title: "Golden Rule", date: "2011" }] }) } as Response;
+          releases: [{ title: "Golden Rule", date: "2011" }] }] }) } as Response;
       }
-      // A fuzzy title search WOULD return the wrong artist — must not be used.
-      return { ok: true, json: async () => ({ recordings: [{ title: "Sunsets",
-        "artist-credit": [{ name: "Hikkadua" }] }] }) } as Response;
+      return { ok: true, json: async () => ({}) } as Response;
     }) as unknown as typeof fetch;
 
     const link = parseMediaLink("https://open.spotify.com/track/1dXFZeIjgDJ8sAc1csFNY2")!;
     const result = await fetchLinkInfo(link, fakeFetch);
     assert.equal(result?.title, "Sunsets");
-    assert.equal(result?.info["Artist"], "Powderfinger"); // NOT Hikkadua
+    assert.equal(result?.info["Artist"], "Powderfinger");
+    assert.equal(result?.info["Album"], "Golden Rule");
     assert.equal(result?.info["Length"], "4:47");
   });
 
-  it("resolves a Spotify album via MusicBrainz URL lookup", async () => {
+  it("resolves a Spotify album via Odesli", async () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       const u = String(input);
-      if (u.includes("/url?resource=")) {
-        return { ok: true, json: async () => ({ relations: [{ "release-group": {
-          title: "A Night at the Opera", "artist-credit": [{ name: "Queen" }],
-          "first-release-date": "1975-11-21" } }] }) } as Response;
+      if (u.includes("song.link")) {
+        return { ok: true, json: async () => ({
+          entityUniqueId: "SPOTIFY_ALBUM::4LH4d3cOWNNsVw41Gqt2kv",
+          entitiesByUniqueId: { "SPOTIFY_ALBUM::4LH4d3cOWNNsVw41Gqt2kv": {
+            type: "album", title: "A Night at the Opera", artistName: "Queen" } },
+        }) } as Response;
       }
       return { ok: true, json: async () => ({}) } as Response;
     }) as unknown as typeof fetch;
@@ -218,8 +227,28 @@ describe("Pasted media links", () => {
     const result = await fetchLinkInfo(link, fakeFetch);
     assert.equal(result?.title, "A Night at the Opera");
     assert.equal(result?.info["Artist"], "Queen");
-    assert.equal(result?.info["Released"], "1975");
     assert.equal(result?.info["Type"], "Album");
+  });
+
+  it("falls back to the MusicBrainz Spotify-URL lookup when Odesli is down", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("song.link")) return { ok: false, json: async () => ({}) } as Response;
+      if (u.includes("/url?resource=")) {
+        return { ok: true, json: async () => ({ relations: [{ recording: { id: "rec-123", title: "Sunsets" } }] }) } as Response;
+      }
+      if (u.includes("/recording/rec-123")) {
+        return { ok: true, json: async () => ({ title: "Sunsets", length: 287_000,
+          "artist-credit": [{ name: "Powderfinger" }], "first-release-date": "2011-01-01",
+          releases: [{ title: "Golden Rule", date: "2011" }] }) } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+
+    const link = parseMediaLink("https://open.spotify.com/track/1dXFZeIjgDJ8sAc1csFNY2")!;
+    const result = await fetchLinkInfo(link, fakeFetch);
+    assert.equal(result?.info["Artist"], "Powderfinger");
+    assert.equal(result?.info["Length"], "4:47");
   });
 
   it("share-text music (no Spotify URL) falls back to a name search", async () => {
