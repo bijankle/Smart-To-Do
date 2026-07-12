@@ -62,6 +62,9 @@ const GENERIC_REMAP: Record<string, string> = {
 const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
 
+/** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
+const APP_VERSION = "v6 · multi-line paste";
+
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
 // ---- capture ---------------------------------------------------------------
@@ -649,6 +652,8 @@ function initSyncControls(): void {
   });
 
   $("#sync-btn").addEventListener("click", () => void doSync(true));
+
+  $("#app-version").textContent = APP_VERSION;
 
   // Force update: drop the service worker + code caches and reload. Tasks
   // live in localStorage and are untouched; only the cached shell is cleared.
