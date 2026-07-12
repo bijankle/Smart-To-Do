@@ -43,6 +43,8 @@ export interface TaskRecord {
   link?: string;
   /** Key info shown in the title callout, e.g. { Author, Published, Pages }. */
   info?: Record<string, string>;
+  /** Enrichment logic version that produced `info`; older stamps re-fetch. */
+  enrichedV?: number;
 }
 
 export interface BucketRecord {

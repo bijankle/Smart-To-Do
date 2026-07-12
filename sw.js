@@ -4,7 +4,7 @@
  * cache only serves when the network is unavailable or slow (>4s) — i.e. in
  * a store aisle, which is exactly where offline support matters.
  */
-const CACHE = "smart-to-do-v2";
+const CACHE = "smart-to-do-v3";
 const SHELL = [
   "./",
   "./index.html",

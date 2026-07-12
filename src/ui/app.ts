@@ -170,10 +170,10 @@ function reEnrichLinkedTasks(): void {
     if (!task.link || reEnriched.has(task.id)) continue;
     const concept = taskMediaConcept(task);
     const isEmpty = !task.info || Object.keys(task.info).length === 0;
-    // Books and films should carry a synopsis; backfill it if an older
-    // enrichment (or source) produced info without one.
-    const missingSynopsis = (concept === "books" || concept === "films") && !task.info?.["Synopsis"];
-    if (!isEmpty && !missingSynopsis) continue;
+    // Re-fetch when the info is empty, or was produced by older enrichment
+    // logic (bump ENRICH_VERSION to force a one-time refresh of everything).
+    const stale = (task.enrichedV ?? 0) < ENRICH_VERSION;
+    if (!isEmpty && !stale) continue;
     reEnriched.add(task.id);
 
     let media = parseMediaLink(task.link);
@@ -206,11 +206,15 @@ function healPlainMediaTasks(): void {
   }
 }
 
+/** Bump when enrichment logic improves, to force a one-time re-fetch of all
+ * linked tasks (e.g. the Spotify exact-artist fix, book synopsis fallback). */
+const ENRICH_VERSION = 2;
+
 async function enrichLinkedTask(taskId: string, media: MediaLink): Promise<void> {
   const result = await fetchLinkInfo(media, fetch, localStorage.getItem(OMDB_KEY));
-  if (!result) return;
+  if (!result || Object.keys(result.info).length === 0) return;
   try {
-    repo.attachInfo(taskId, { title: result.title, info: result.info });
+    repo.attachInfo(taskId, { title: result.title, info: result.info, enrichedV: ENRICH_VERSION });
   } catch {
     return; // task deleted while we were fetching
   }
@@ -802,11 +806,25 @@ async function main(): Promise<void> {
   render();
   $<HTMLInputElement>("#capture-input").focus();
 
-  // Offline support when hosted (skipped during local development).
+  // Offline support when hosted (skipped during local development). Reload
+  // once when a new service worker takes control, so updated code lands
+  // promptly instead of a launch behind.
   if ("serviceWorker" in navigator && location.hostname !== "localhost") {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
-      /* not fatal — the app still works online */
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloading) return;
+      reloading = true;
+      location.reload();
     });
+    navigator.serviceWorker
+      .register("./sw.js")
+      .then((reg) => {
+        reg.update();
+        setInterval(() => reg.update(), 60 * 60 * 1000);
+      })
+      .catch(() => {
+        /* not fatal — the app still works online */
+      });
   }
 }
 

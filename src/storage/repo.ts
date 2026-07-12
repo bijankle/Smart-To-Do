@@ -304,11 +304,15 @@ export class Repository {
   }
 
   /** Attach or update enrichment (fetched title/info) on a linked task. */
-  attachInfo(id: string, updates: { title?: string; info?: Record<string, string>; link?: string }): void {
+  attachInfo(
+    id: string,
+    updates: { title?: string; info?: Record<string, string>; link?: string; enrichedV?: number },
+  ): void {
     const task = this.requireTask(id);
     if (updates.title) task.title = updates.title.trim();
     if (updates.info) task.info = updates.info;
     if (updates.link) task.link = updates.link;
+    if (updates.enrichedV !== undefined) task.enrichedV = updates.enrichedV;
     this.touch(task);
   }
 
