@@ -440,16 +440,26 @@ async function mbRecordingByTitleArtist(title: string, artist: string, fetchFn: 
 /** Music info. Odesli resolves Spotify links to the exact title+artist. */
 async function fetchMusicInfo(link: MediaLink, fetchFn: typeof fetch): Promise<LinkInfo | null> {
   const entity = link.entity ?? "track";
+  const isSpotifyUrl = Boolean(link.url && /open\.spotify\.com/.test(link.url));
 
-  // Spotify link → Odesli for the exact title + artist, then MusicBrainz for
-  // album/length/year (now a precise title+artist match, not a guess).
-  if (link.url && /open\.spotify\.com/.test(link.url) && entity !== "artist") {
+  if (isSpotifyUrl && entity !== "artist") {
+    // Two independent, CORS-friendly ways to name the track — try both and keep
+    // whatever answers. Odesli gives title + exact artist; Spotify's own oEmbed
+    // gives at least the title. We must NEVER discard a known name just because
+    // the (optional) MusicBrainz detail lookup later comes up empty.
     const od = await odesliEntity(link.url, fetchFn);
-    if (od?.title) {
-      const info: Record<string, string> = { Type: od.type === "album" ? "Album" : "Song" };
-      if (od.artistName) info["Artist"] = od.artistName;
-      if (od.type !== "album" && od.artistName) {
-        const rec = await mbRecordingByTitleArtist(od.title, od.artistName, fetchFn);
+    const oeTitle = od?.title ? null : await nameFromSpotify(link.url, fetchFn);
+    const title = od?.title ?? oeTitle;
+
+    if (title) {
+      const isAlbum = od?.type === "album" || entity === "album";
+      const info: Record<string, string> = { Type: isAlbum ? "Album" : "Song" };
+      if (od?.artistName) info["Artist"] = od.artistName;
+
+      // Additive only: album / year / length. Any failure here leaves the
+      // title + artist we already have intact.
+      if (!isAlbum && od?.artistName) {
+        const rec = await mbRecordingByTitleArtist(title, od.artistName, fetchFn);
         if (rec) {
           const album = rec.releases?.find((r) => r.title)?.title;
           if (album) info["Album"] = album;
@@ -459,12 +469,13 @@ async function fetchMusicInfo(link: MediaLink, fetchFn: typeof fetch): Promise<L
           if (length) info["Length"] = length;
         }
       }
-      return { title: od.title, info };
+      return { title, info };
     }
   }
 
-  // Fallback: resolve the exact entity by its Spotify URL relationship in MB.
-  if (link.url && /open\.spotify\.com/.test(link.url)) {
+  // Deeper fallback: resolve the exact entity by its Spotify URL relationship in
+  // MusicBrainz (covers albums/artists and any track not seen by Odesli/oEmbed).
+  if (isSpotifyUrl) {
     const exact = await musicBySpotifyUrl(link, fetchFn);
     if (exact) return exact;
   }
@@ -476,35 +487,46 @@ async function fetchMusicInfo(link: MediaLink, fetchFn: typeof fetch): Promise<L
   const term = encodeURIComponent(query);
   const target = normalize(query);
 
+  // From here MusicBrainz only *enriches* the name we already have; if it fails
+  // or misses, we still return { title: query } so the task shows the real name.
   if (entity === "artist") {
-    const r = await fetchFn(`${MB}/artist?query=${term}&fmt=json&limit=5`);
-    if (!r.ok) return null;
-    const list = ((await r.json()) as { artists?: MbArtist[] }).artists ?? [];
-    const a = list.find((x) => normalize(x.name) === target) ?? list[0];
-    if (!a?.name) return null;
     const info: Record<string, string> = { Type: "Artist" };
-    if (a.disambiguation) info["About"] = a.disambiguation;
-    if (a.country) info["Country"] = a.country;
-    return { title: a.name, info };
+    let name = titleCase(query);
+    const r = await fetchFn(`${MB}/artist?query=${term}&fmt=json&limit=5`).catch(() => null);
+    if (r?.ok) {
+      const list = ((await r.json()) as { artists?: MbArtist[] }).artists ?? [];
+      const a = list.find((x) => normalize(x.name) === target) ?? list[0];
+      if (a?.name) {
+        name = a.name;
+        if (a.disambiguation) info["About"] = a.disambiguation;
+        if (a.country) info["Country"] = a.country;
+      }
+    }
+    return { title: name, info };
   }
   if (entity === "album") {
-    const r = await fetchFn(`${MB}/release-group?query=${term}&fmt=json&limit=5`);
-    if (!r.ok) return null;
-    const list = ((await r.json()) as { "release-groups"?: MbReleaseGroup[] })["release-groups"] ?? [];
-    const g = list.find((x) => normalize(x.title) === target) ?? list[0];
-    if (!g?.title) return null;
     const info: Record<string, string> = { Type: "Album" };
-    const artist = g["artist-credit"]?.map((c) => c.name).filter(Boolean).join(", ");
-    if (artist) info["Artist"] = artist;
-    if (g["first-release-date"]) info["Released"] = g["first-release-date"].slice(0, 4);
-    return { title: g.title, info };
+    let name = titleCase(query);
+    const r = await fetchFn(`${MB}/release-group?query=${term}&fmt=json&limit=5`).catch(() => null);
+    if (r?.ok) {
+      const list = ((await r.json()) as { "release-groups"?: MbReleaseGroup[] })["release-groups"] ?? [];
+      const g = list.find((x) => normalize(x.title) === target) ?? list[0];
+      if (g?.title) {
+        name = g.title;
+        const artist = g["artist-credit"]?.map((c) => c.name).filter(Boolean).join(", ");
+        if (artist) info["Artist"] = artist;
+        if (g["first-release-date"]) info["Released"] = g["first-release-date"].slice(0, 4);
+      }
+    }
+    return { title: name, info };
   }
-  const r = await fetchFn(`${MB}/recording?query=${term}&fmt=json&limit=8`);
-  if (!r.ok) return null;
-  const list = ((await r.json()) as { recordings?: MbRecording[] }).recordings ?? [];
-  const rec = list.find((x) => normalize(x.title) === target) ?? list[0];
-  if (!rec?.title) return null;
-  return songInfo(rec);
+  const r = await fetchFn(`${MB}/recording?query=${term}&fmt=json&limit=8`).catch(() => null);
+  if (r?.ok) {
+    const list = ((await r.json()) as { recordings?: MbRecording[] }).recordings ?? [];
+    const rec = list.find((x) => normalize(x.title) === target) ?? list[0];
+    if (rec?.title) return songInfo(rec);
+  }
+  return { title: titleCase(query), info: { Type: "Song" } };
 }
 
 export async function fetchLinkInfo(

@@ -230,6 +230,25 @@ describe("Pasted media links", () => {
     assert.equal(result?.info["Type"], "Album");
   });
 
+  it("keeps the Spotify song name from oEmbed even when everything else fails", async () => {
+    // Odesli down, MusicBrainz down — but Spotify's own oEmbed still names the
+    // track. The task must show 'Sunsets', never the 'Spotify link' placeholder.
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("song.link")) return { ok: false, json: async () => ({}) } as Response;
+      if (u.includes("/oembed")) {
+        return { ok: true, json: async () => ({ title: "Sunsets", provider_name: "Spotify" }) } as Response;
+      }
+      // Every MusicBrainz call fails.
+      return { ok: false, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+
+    const link = parseMediaLink("https://open.spotify.com/track/1dXFZeIjgDJ8sAc1csFNY2")!;
+    const result = await fetchLinkInfo(link, fakeFetch);
+    assert.equal(result?.title, "Sunsets");
+    assert.equal(result?.info["Type"], "Song");
+  });
+
   it("falls back to the MusicBrainz Spotify-URL lookup when Odesli is down", async () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       const u = String(input);
