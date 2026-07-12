@@ -547,6 +547,31 @@ body {
   margin-top: 6px;
 }
 
+/* Clear-all bar: right-aligned so the button sits over the row × column. */
+.list-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 10px 6px;
+}
+
+.clear-all {
+  height: var(--control-height-small);
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.clear-all:hover {
+  background: var(--danger-tint);
+  border-color: var(--danger-border);
+}
+
 .footer {
   display: flex;
   justify-content: center;

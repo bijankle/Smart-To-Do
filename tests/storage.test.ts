@@ -262,6 +262,33 @@ describe("Repository — bespoke store setup", () => {
     assert.deepEqual(repo.addTask("backup photos and update drivers").buckets, ["Computer tasks"]);
   });
 
+  it("clear all removes a bucket's items but keeps ones shared with another store", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.applyStoreSetup(STORES, REMAP);
+    const milk = repo.addTask("milk", "Coles"); // Coles only
+    const shared = repo.addTask("condoms"); // Coles AND Chemist Warehouse
+    assert.ok(shared.buckets.includes("Coles") && shared.buckets.includes("Chemist Warehouse"));
+
+    const cleared = repo.clearFilter("Coles");
+    assert.equal(cleared, 2);
+    assert.equal(repo.getTask(milk.id), null); // single-bucket item deleted
+    assert.deepEqual(repo.getTask(shared.id)!.buckets, ["Chemist Warehouse"]); // survives elsewhere
+    // Learning is preserved: a fresh "milk" still auto-tags into Coles.
+    assert.deepEqual(repo.addTask("milk").buckets, ["Coles"]);
+  });
+
+  it("clear all in the All view deletes every open task", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    repo.applyStoreSetup(STORES, REMAP);
+    repo.addTask("milk");
+    repo.addTask("hammer");
+    const done = repo.addTask("bananas");
+    repo.setDone(done.id, true); // completed tasks are untouched by clear
+    assert.equal(repo.clearFilter("all"), 2);
+    assert.equal(repo.listTasks("all").length, 0);
+    assert.equal(repo.listCompleted("all").length, 1);
+  });
+
   it("auto-tags everyday captures into the right store", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.applyStoreSetup(STORES, REMAP);

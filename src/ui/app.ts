@@ -63,7 +63,7 @@ const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v7 · computer tasks";
+const APP_VERSION = "v8 · clear all";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -513,6 +513,25 @@ function renderList(): void {
         : `No tasks tagged “${filter}” yet.`;
     list.append(empty);
   } else {
+    // Clear-all bar, right-aligned above the top item (over the × column).
+    if (open.length > 0) {
+      const bar = document.createElement("div");
+      bar.className = "list-actions";
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = "clear-all";
+      clear.textContent = "Clear all";
+      clear.title =
+        filter === "all" ? "Delete every task" : `Clear all items from ${filter}`;
+      clear.addEventListener("click", () => {
+        const what = filter === "all" ? "all tasks" : `all items in “${filter}”`;
+        if (!window.confirm(`Clear ${what}? This can’t be undone.`)) return;
+        repo.clearFilter(filter);
+        render();
+      });
+      bar.append(clear);
+      list.append(bar);
+    }
     for (const task of open) {
       list.append(renderRow(task));
     }

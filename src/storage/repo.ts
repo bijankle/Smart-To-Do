@@ -408,6 +408,36 @@ export class Repository {
     if (changed) this.scheduleSave();
   }
 
+  /**
+   * Clear the current view. In a bucket view, every open task is un-filed from
+   * that bucket; one still needed elsewhere ("condoms" in Coles AND Chemist)
+   * keeps its other memberships, and one left with none is deleted. In "all",
+   * every open task is deleted. The trained model is left intact, so cleared
+   * items still auto-tag correctly next time. Returns how many were affected.
+   */
+  clearFilter(filter: TaskFilter): number {
+    const ts = this.now().toISOString();
+    let count = 0;
+    for (const task of Object.values(this.doc.tasks)) {
+      if (task.deletedAt !== null || task.done) continue;
+      if (filter !== "all") {
+        if (!task.buckets.includes(filter)) continue;
+        task.buckets = task.buckets.filter((b) => b !== filter);
+        task.trainedBuckets = task.trainedBuckets.filter((b) => b !== filter);
+        if (task.buckets.length > 0) {
+          task.modifiedAt = ts;
+          count++;
+          continue;
+        }
+      }
+      task.deletedAt = ts;
+      task.modifiedAt = ts;
+      count++;
+    }
+    if (count > 0) this.scheduleSave();
+    return count;
+  }
+
   // ---- manual ordering ---------------------------------------------------
 
   /** "This is important" — the user's replacement for priority tags. */
