@@ -47,7 +47,7 @@ const MY_PILLS = [
   "Uniqlo",
   // Life categories
   "Medical",
-  "Computer",
+  "Computer tasks",
 ];
 const GENERIC_REMAP: Record<string, string> = {
   groceries: "Coles",
@@ -63,7 +63,7 @@ const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v6 · multi-line paste";
+const APP_VERSION = "v7 · computer tasks";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 

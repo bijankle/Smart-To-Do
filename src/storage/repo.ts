@@ -91,18 +91,39 @@ export class Repository {
    */
   applyStoreSetup(stores: string[], remap: Record<string, string>): boolean {
     const version = this.doc.setupVersion ?? 0;
-    if (version >= 4) return false;
+    if (version >= 5) return false;
 
     if (version < 2) this.applyPillSetup(stores, remap);
     // v4: the media feature (songs/films/books) was removed — drop those pills
     // and any tasks that only lived in them, then rebuild the classifier so its
     // seeds match the current concepts and refresh auto tags.
     if (version < 4) this.removeMediaFeature();
+    // v5: the "Computer" pill was renamed "Computer tasks" — carry its tasks
+    // and training across before it disappears.
+    if (version < 5) this.foldBucket("Computer", "Computer tasks");
     this.rebuildClassifier();
     this.retagAuto();
-    this.doc.setupVersion = 4;
+    this.doc.setupVersion = 5;
     this.scheduleSave();
     return true;
+  }
+
+  /**
+   * Rename a bucket in place by moving every task's membership and training
+   * from `from` to `to`, then tombstoning `from`. The classifier is rebuilt by
+   * the caller, so only the record arrays are remapped here.
+   */
+  private foldBucket(from: string, to: string): void {
+    if (!this.isLiveBucket(from)) return;
+    if (!this.isLiveBucket(to)) this.createBucket(to);
+    const ts = this.now().toISOString();
+    for (const task of Object.values(this.doc.tasks)) {
+      if (task.deletedAt !== null || !task.buckets.includes(from)) continue;
+      task.buckets = [...new Set(task.buckets.map((b) => (b === from ? to : b)))];
+      task.trainedBuckets = [...new Set(task.trainedBuckets.map((b) => (b === from ? to : b)))];
+      task.modifiedAt = ts;
+    }
+    this.deleteBucket(from);
   }
 
   /**

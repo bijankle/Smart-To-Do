@@ -241,6 +241,27 @@ describe("Repository — bespoke store setup", () => {
     assert.ok(!reopened.listBuckets().includes("Uniqlo"));
   });
 
+  it("renames the Computer pill to 'Computer tasks', keeping its tasks", async () => {
+    const persistence = new MemoryPersistence();
+    // Simulate an existing install (setup v4) that still has the old "Computer" pill.
+    const before = await Repository.open(persistence, makeOptions());
+    before.createBucket("Computer");
+    const t = before.addTask("do my tax return on mygov", "Computer");
+    assert.deepEqual(before.getTask(t.id)!.buckets, ["Computer"]);
+    await before.flush();
+    const doc = JSON.parse((await persistence.load())!);
+    doc.setupVersion = 4;
+    await persistence.save(JSON.stringify(doc));
+
+    const repo = await Repository.open(persistence, makeOptions(5_000_000));
+    assert.equal(repo.applyStoreSetup([...STORES, "Computer tasks"], REMAP), true);
+    assert.ok(!repo.listBuckets().includes("Computer"));
+    assert.ok(repo.listBuckets().includes("Computer tasks"));
+    assert.deepEqual(repo.getTask(t.id)!.buckets, ["Computer tasks"]);
+    // The moved training still classifies into the renamed bucket.
+    assert.deepEqual(repo.addTask("backup photos and update drivers").buckets, ["Computer tasks"]);
+  });
+
   it("auto-tags everyday captures into the right store", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.applyStoreSetup(STORES, REMAP);
