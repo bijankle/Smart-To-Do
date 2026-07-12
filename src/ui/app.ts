@@ -20,6 +20,7 @@ import { Repository, type TaskFilter } from "../storage/repo.js";
 import { WebStoragePersistence } from "../storage/persistence.js";
 import type { TaskRecord } from "../storage/doc.js";
 import { DriveSync } from "../sync/drive.js";
+import { lookupProductConcepts } from "../sync/productlookup.js";
 
 let repo: Repository;
 let filter: TaskFilter = "all";
@@ -62,9 +63,13 @@ const GENERIC_REMAP: Record<string, string> = {
 
 const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
+const LOOKUP_ENABLED_KEY = "smart-to-do/online-lookup"; // "off" disables it
+const LOOKUP_CACHE_KEY = "smart-to-do/lookup-cache";
+/** Space network lookups to respect Open Food Facts' 10-requests/minute limit. */
+const LOOKUP_MIN_INTERVAL_MS = 6500;
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v13 · more coverage";
+const APP_VERSION = "v14 · live lookup";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -153,6 +158,67 @@ function submitCapture(raw: string): void {
   snapshot();
   for (const line of lines) captureOne(line);
   render();
+  queueProductLookups();
+}
+
+// ---- online product lookup (fallback for items the lexicon can't place) -----
+
+const lookupQueue: string[] = []; // task ids awaiting lookup
+const lookupSeen = new Set<string>(); // task ids attempted this session
+let lookupRunning = false;
+let lastLookupAt = 0;
+
+function lookupEnabled(): boolean {
+  return localStorage.getItem(LOOKUP_ENABLED_KEY) !== "off";
+}
+
+function loadLookupCache(): Record<string, string[]> {
+  try {
+    return JSON.parse(localStorage.getItem(LOOKUP_CACHE_KEY) ?? "{}") as Record<string, string[]>;
+  } catch {
+    return {};
+  }
+}
+
+/** Queue every still-untagged, untouched open task for a background lookup. */
+function queueProductLookups(): void {
+  if (!lookupEnabled()) return;
+  for (const task of repo.listTasks("all")) {
+    if (task.buckets.length > 0 || task.manualTags || lookupSeen.has(task.id)) continue;
+    lookupSeen.add(task.id);
+    lookupQueue.push(task.id);
+  }
+  void runLookupQueue();
+}
+
+async function runLookupQueue(): Promise<void> {
+  if (lookupRunning) return;
+  lookupRunning = true;
+  try {
+    while (lookupQueue.length > 0) {
+      const id = lookupQueue.shift()!;
+      const task = repo.getTask(id);
+      if (!task || task.buckets.length > 0 || task.manualTags) continue;
+
+      const term = task.title.trim().toLowerCase();
+      const cache = loadLookupCache();
+      let concepts = cache[term];
+      if (concepts === undefined) {
+        if (!navigator.onLine || !lookupEnabled()) continue; // try again next session
+        const wait = LOOKUP_MIN_INTERVAL_MS - (Date.now() - lastLookupAt);
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        lastLookupAt = Date.now();
+        concepts = await lookupProductConcepts(task.title, fetch);
+        cache[term] = concepts;
+        localStorage.setItem(LOOKUP_CACHE_KEY, JSON.stringify(cache));
+      }
+      if (concepts.length === 0) continue;
+      const buckets = [...new Set(concepts.flatMap((c) => repo.bucketsForConceptName(c)))];
+      if (buckets.length > 0 && repo.setSuggestedTags(id, buckets)) render();
+    }
+  } finally {
+    lookupRunning = false;
+  }
 }
 
 /** Shrink/grow the capture box to fit its content (so a pasted list is visible). */
@@ -735,6 +801,13 @@ function initSyncControls(): void {
 
   $("#app-version").textContent = APP_VERSION;
 
+  const lookupToggle = $<HTMLInputElement>("#lookup-toggle");
+  lookupToggle.checked = lookupEnabled();
+  lookupToggle.addEventListener("change", () => {
+    localStorage.setItem(LOOKUP_ENABLED_KEY, lookupToggle.checked ? "on" : "off");
+    if (lookupToggle.checked) queueProductLookups();
+  });
+
   $("#undo-btn").addEventListener("click", undo);
   $("#redo-btn").addEventListener("click", redo);
 
@@ -816,6 +889,7 @@ async function main(): Promise<void> {
   window.addEventListener("keydown", handleUndoKeys);
   initSyncControls();
   render();
+  queueProductLookups();
   $<HTMLTextAreaElement>("#capture-input").focus();
 
   // Offline support when hosted (skipped during local development). Reload

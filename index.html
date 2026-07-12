@@ -7,9 +7,9 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <title>Smart To-Do</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='22' fill='%235865F2'/%3E%3Ctext x='32' y='44' font-family='sans-serif' font-size='36' font-weight='800' fill='%23fff' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="./src/ui/theme.css?v=13" />
-  <link rel="stylesheet" href="./src/ui/app.css?v=13" />
-  <script type="module" src="./dist/src/ui/app.js?v=13"></script>
+  <link rel="stylesheet" href="./src/ui/theme.css?v=14" />
+  <link rel="stylesheet" href="./src/ui/app.css?v=14" />
+  <script type="module" src="./dist/src/ui/app.js?v=14"></script>
 </head>
 <body>
   <main class="app">
@@ -48,6 +48,18 @@
         <button type="button" id="disconnect-btn" class="btn-ghost" hidden>Disconnect</button>
         <span id="sync-status" class="sync-status"></span>
       </div>
+
+      <div class="settings-title" style="margin-top:22px;">Auto-categorise unknown items</div>
+      <p class="settings-hint">
+        When an item doesn't match the built-in categories, look it up online
+        (Open Food Facts / Open Beauty Facts — free, no account) to place it.
+        Best for groceries, health &amp; beauty. Runs quietly in the background;
+        turn it off to stay fully offline.
+      </p>
+      <label class="settings-row" style="cursor:pointer;">
+        <input type="checkbox" id="lookup-toggle" />
+        <span>Look up unknown items online</span>
+      </label>
 
       <div class="settings-title" style="margin-top:22px;">App version</div>
       <p class="settings-hint">

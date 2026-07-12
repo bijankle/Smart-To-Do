@@ -15,7 +15,7 @@
  */
 
 import { classify, createModel, ensureBucket, seed, train, untrain } from "../engine/classify.js";
-import { conceptForBucketName, matchConcepts, type Concept } from "../engine/lexicon.js";
+import { CONCEPTS, conceptForBucketName, matchConcepts, type Concept } from "../engine/lexicon.js";
 import { tokenize } from "../engine/tokenize.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD } from "../engine/parse.js";
 import {
@@ -309,6 +309,28 @@ export class Repository {
 
   private liveBucketsForConcept(concept: Concept): string[] {
     return this.listBuckets().filter((name) => conceptForBucketName(name) === concept);
+  }
+
+  /** Live buckets mapped to a concept name (for the online product lookup). */
+  bucketsForConceptName(conceptName: string): string[] {
+    const concept = CONCEPTS.find((c) => c.name === conceptName);
+    return concept ? this.liveBucketsForConcept(concept) : [];
+  }
+
+  /**
+   * Apply background-suggested tags from the online lookup. Deliberately timid:
+   * only fires on live, open, still-untagged tasks the user has never touched,
+   * so it can never override a manual choice or an existing tag.
+   */
+  setSuggestedTags(id: string, buckets: string[]): boolean {
+    const task = this.doc.tasks[id];
+    if (!task || task.deletedAt !== null || task.done) return false;
+    if (task.buckets.length > 0 || task.manualTags || task.trainedBuckets.length > 0) return false;
+    const live = [...new Set(buckets.filter((b) => this.isLiveBucket(b)))];
+    if (live.length === 0) return false;
+    task.buckets = live;
+    this.touch(task);
+    return true;
   }
 
   /** Live, OPEN tasks for a pill filter, sorted top-first. Completed tasks vanish from here. */
