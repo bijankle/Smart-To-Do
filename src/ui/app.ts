@@ -79,7 +79,8 @@ interface CaptureEntry {
 const undoStack: CaptureEntry[] = [];
 const redoStack: CaptureEntry[] = [];
 
-function submitCapture(raw: string): void {
+/** Add a single task from one line of capture text (no newlines expected). */
+function captureOne(raw: string): void {
   const tagMatch = TAG_PATTERN.exec(raw);
   const title = raw.replace(TAG_PATTERN, " ").replace(/\s+/g, " ").trim();
   if (!title) return;
@@ -93,6 +94,17 @@ function submitCapture(raw: string): void {
     task = repo.addTask(title);
   }
   undoStack.push({ text: raw, taskId: task.id });
+}
+
+/**
+ * Capture one OR many tasks: pasting a list (e.g. copied from Google Keep)
+ * adds one task per non-empty line, each auto-tagged on its own, instead of
+ * mashing the whole list into a single item.
+ */
+function submitCapture(raw: string): void {
+  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return;
+  for (const line of lines) captureOne(line);
   render();
 }
 
@@ -104,6 +116,21 @@ function handleCapture(event: SubmitEvent): void {
   redoStack.length = 0; // a fresh capture invalidates the redo history
   submitCapture(raw);
   input.value = "";
+}
+
+/**
+ * A single-line <input> silently turns pasted newlines into spaces, so a
+ * multi-line paste would arrive as one blob. Intercept it here — while the
+ * line breaks still exist — and file each line as its own task. Single-line
+ * pastes fall through to normal typing so the user can edit before adding.
+ */
+function handlePaste(event: ClipboardEvent): void {
+  const text = event.clipboardData?.getData("text") ?? "";
+  if (!/\r?\n/.test(text.trim())) return;
+  event.preventDefault();
+  redoStack.length = 0;
+  submitCapture(text);
+  $<HTMLInputElement>("#capture-input").value = "";
 }
 
 function undoCapture(): void {
@@ -658,6 +685,7 @@ async function main(): Promise<void> {
   repo.applyStoreSetup(MY_PILLS, GENERIC_REMAP);
   repo.retagUntagged();
   $("#capture").addEventListener("submit", handleCapture as EventListener);
+  $("#capture-input").addEventListener("paste", handlePaste as EventListener);
   window.addEventListener("keydown", handleUndoKeys);
   initSyncControls();
   render();
