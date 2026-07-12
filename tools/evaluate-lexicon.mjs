@@ -116,6 +116,10 @@ const CASES = [
   ["mouse pad", [JB]], ["wall clock", [KM]], ["tablecloth", [KM]],
   ["witch hazel toner", [KM, CW]], ["printer toner cartridge", [OW]],
   ["caster sugar", [C]], ["hiking boots", [UQ]], ["balaclava", [UQ]],
+  // ---- convenience foods, med abbreviations, brand eponyms ----
+  ["ready meals", [C]], ["frozen lasagne", [C]], ["microwave rice", [C]],
+  ["chicken nuggets", [C]], ["mg tablets", [CW]], ["vitamin d tablets", [CW]],
+  ["piksters", [C, CW]], ["aux cable", [JB]], ["wart treatment", [C, CW]],
 ];
 
 const repo = await Repository.open(new MemoryPersistence(), {});

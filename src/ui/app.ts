@@ -64,7 +64,7 @@ const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v12 · nav + copy";
+const APP_VERSION = "v13 · more coverage";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
