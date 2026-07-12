@@ -156,21 +156,42 @@ async function fetchBookInfo(link: MediaLink, fetchFn: typeof fetch): Promise<Li
   const data = (await response.json()) as { items?: GoogleBookVolume[] };
   const items = data.items ?? [];
   const target = normalize(query);
+  const matches = (it: GoogleBookVolume) => {
+    const t = normalize(it.volumeInfo?.title);
+    return t.length > 0 && (target.includes(t) || t.includes(target));
+  };
+  // Prefer a title-matching edition that actually carries a description, so
+  // the synopsis isn't dropped just because the first edition lacks one.
   const pick =
-    items.find((it) => {
-      const t = normalize(it.volumeInfo?.title);
-      return t.length > 0 && (target.includes(t) || t.includes(target));
-    }) ?? items[0];
+    items.find((it) => matches(it) && it.volumeInfo?.description) ??
+    items.find((it) => it.volumeInfo?.description) ??
+    items.find(matches) ??
+    items[0];
   const v = pick?.volumeInfo;
   if (!v) return null;
 
+  // Pull the best available metadata across editions (some fields live on
+  // different editions than the description).
+  const anyBy = <T>(get: (vi: NonNullable<GoogleBookVolume["volumeInfo"]>) => T | undefined): T | undefined => {
+    for (const it of [pick, ...items]) {
+      const val = it.volumeInfo && get(it.volumeInfo);
+      if (val !== undefined && val !== null && (!Array.isArray(val) || val.length > 0)) return val;
+    }
+    return undefined;
+  };
+
   const info: Record<string, string> = {};
-  if (v.authors?.length) info["Author"] = v.authors.slice(0, 2).join(", ");
-  if (v.publishedDate) info["Published"] = v.publishedDate.slice(0, 4);
-  if (v.pageCount) info["Pages"] = String(v.pageCount);
-  if (v.averageRating) info["Rating"] = `${v.averageRating.toFixed(1)} / 5`;
-  if (v.categories?.length) info["Genre"] = v.categories[0]!;
-  const synopsis = trimSynopsis(v.description);
+  const authors = anyBy((vi) => vi.authors);
+  if (authors?.length) info["Author"] = authors.slice(0, 2).join(", ");
+  const published = anyBy((vi) => vi.publishedDate);
+  if (published) info["Published"] = published.slice(0, 4);
+  const pages = anyBy((vi) => vi.pageCount);
+  if (pages) info["Pages"] = String(pages);
+  const rating = anyBy((vi) => vi.averageRating);
+  if (rating) info["Rating"] = `${rating.toFixed(1)} / 5`;
+  const categories = anyBy((vi) => vi.categories);
+  if (categories?.length) info["Genre"] = categories[0]!;
+  const synopsis = trimSynopsis(v.description ?? anyBy((vi) => vi.description));
   if (synopsis) info["Synopsis"] = synopsis;
   return { title: v.title ?? titleCase(query), info };
 }
@@ -320,19 +341,87 @@ interface MbReleaseGroup {
   "primary-type"?: string;
 }
 interface MbArtist { name?: string; type?: string; country?: string; disambiguation?: string }
+interface MbRelation {
+  recording?: MbRecording & { id?: string };
+  "release-group"?: MbReleaseGroup & { id?: string };
+  release?: MbRelease & { id?: string; "release-group"?: MbReleaseGroup };
+  artist?: MbArtist & { id?: string };
+}
+
+const MB = "https://musicbrainz.org/ws/2";
+
+function songInfo(rec: MbRecording): LinkInfo {
+  const info: Record<string, string> = { Type: "Song" };
+  const artist = rec["artist-credit"]?.map((c) => c.name).filter(Boolean).join(", ");
+  if (artist) info["Artist"] = artist;
+  const album = rec.releases?.find((r) => r.title)?.title;
+  if (album) info["Album"] = album;
+  const year = rec["first-release-date"]?.slice(0, 4) ?? rec.releases?.[0]?.date?.slice(0, 4);
+  if (year) info["Released"] = year;
+  const length = formatTrackLength(rec.length);
+  if (length) info["Length"] = length;
+  return { title: rec.title ?? "", info };
+}
+
+/**
+ * Resolve a Spotify link to the EXACT MusicBrainz entity via its stored URL
+ * relationship — a fuzzy title search alone picks the wrong "Sunsets".
+ */
+async function musicBySpotifyUrl(link: MediaLink, fetchFn: typeof fetch): Promise<LinkInfo | null> {
+  const entity = link.entity ?? "track";
+  const inc = entity === "artist" ? "artist-rels" : entity === "album" ? "release-rels+release-group-rels" : "recording-rels";
+  const r = await fetchFn(`${MB}/url?resource=${encodeURIComponent(link.url)}&inc=${inc}&fmt=json`);
+  if (!r.ok) return null;
+  const relations = ((await r.json()) as { relations?: MbRelation[] }).relations ?? [];
+
+  if (entity === "artist") {
+    const a = relations.find((x) => x.artist)?.artist;
+    if (!a?.name) return null;
+    const info: Record<string, string> = { Type: "Artist" };
+    if (a.disambiguation) info["About"] = a.disambiguation;
+    if (a.country) info["Country"] = a.country;
+    return { title: a.name, info };
+  }
+  if (entity === "album") {
+    const rg = relations.find((x) => x["release-group"])?.["release-group"];
+    const rel = relations.find((x) => x.release)?.release;
+    const group = rg ?? rel?.["release-group"];
+    const title = group?.title ?? rel?.title;
+    if (!title) return null;
+    const info: Record<string, string> = { Type: "Album" };
+    const artist = group?.["artist-credit"]?.map((c) => c.name).filter(Boolean).join(", ");
+    if (artist) info["Artist"] = artist;
+    const year = group?.["first-release-date"]?.slice(0, 4) ?? rel?.date?.slice(0, 4);
+    if (year) info["Released"] = year;
+    return { title, info };
+  }
+  // Track: the relation carries the recording id; fetch full detail for it.
+  const recStub = relations.find((x) => x.recording)?.recording;
+  if (!recStub?.id) return recStub?.title ? songInfo(recStub) : null;
+  const detail = await fetchFn(`${MB}/recording/${recStub.id}?inc=artist-credits+releases&fmt=json`);
+  if (!detail.ok) return recStub.title ? songInfo(recStub) : null;
+  return songInfo((await detail.json()) as MbRecording);
+}
 
 /** Music info from MusicBrainz (CORS-enabled, keyless). */
 async function fetchMusicInfo(link: MediaLink, fetchFn: typeof fetch): Promise<LinkInfo | null> {
+  const entity = link.entity ?? "track";
+
+  // For a real Spotify link, resolve the exact entity by its URL first.
+  if (link.url && /open\.spotify\.com/.test(link.url)) {
+    const exact = await musicBySpotifyUrl(link, fetchFn);
+    if (exact) return exact;
+  }
+
+  // Fallback: search by name (share text, or when the URL isn't in MusicBrainz).
   let query = link.slugTitle;
   if (!query && link.url) query = await nameFromSpotify(link.url, fetchFn);
   if (!query) return null;
   const term = encodeURIComponent(query);
   const target = normalize(query);
-  const entity = link.entity ?? "track";
-  const base = "https://musicbrainz.org/ws/2";
 
   if (entity === "artist") {
-    const r = await fetchFn(`${base}/artist?query=${term}&fmt=json&limit=5`);
+    const r = await fetchFn(`${MB}/artist?query=${term}&fmt=json&limit=5`);
     if (!r.ok) return null;
     const list = ((await r.json()) as { artists?: MbArtist[] }).artists ?? [];
     const a = list.find((x) => normalize(x.name) === target) ?? list[0];
@@ -343,7 +432,7 @@ async function fetchMusicInfo(link: MediaLink, fetchFn: typeof fetch): Promise<L
     return { title: a.name, info };
   }
   if (entity === "album") {
-    const r = await fetchFn(`${base}/release-group?query=${term}&fmt=json&limit=5`);
+    const r = await fetchFn(`${MB}/release-group?query=${term}&fmt=json&limit=5`);
     if (!r.ok) return null;
     const list = ((await r.json()) as { "release-groups"?: MbReleaseGroup[] })["release-groups"] ?? [];
     const g = list.find((x) => normalize(x.title) === target) ?? list[0];
@@ -354,21 +443,12 @@ async function fetchMusicInfo(link: MediaLink, fetchFn: typeof fetch): Promise<L
     if (g["first-release-date"]) info["Released"] = g["first-release-date"].slice(0, 4);
     return { title: g.title, info };
   }
-  const r = await fetchFn(`${base}/recording?query=${term}&fmt=json&limit=8`);
+  const r = await fetchFn(`${MB}/recording?query=${term}&fmt=json&limit=8`);
   if (!r.ok) return null;
   const list = ((await r.json()) as { recordings?: MbRecording[] }).recordings ?? [];
   const rec = list.find((x) => normalize(x.title) === target) ?? list[0];
   if (!rec?.title) return null;
-  const info: Record<string, string> = { Type: "Song" };
-  const artist = rec["artist-credit"]?.map((c) => c.name).filter(Boolean).join(", ");
-  if (artist) info["Artist"] = artist;
-  const album = rec.releases?.[0]?.title;
-  if (album) info["Album"] = album;
-  const year = rec["first-release-date"]?.slice(0, 4) ?? rec.releases?.[0]?.date?.slice(0, 4);
-  if (year) info["Released"] = year;
-  const length = formatTrackLength(rec.length);
-  if (length) info["Length"] = length;
-  return { title: rec.title, info };
+  return songInfo(rec);
 }
 
 export async function fetchLinkInfo(

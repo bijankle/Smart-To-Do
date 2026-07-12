@@ -51,6 +51,19 @@ describe("Pasted media links", () => {
     assert.ok(result?.info["Synopsis"]?.includes("Ryland Grace"));
   });
 
+  it("skips a description-less edition to find one with a synopsis", async () => {
+    const fakeFetch = (async () => ({ ok: true, json: async () => ({ items: [
+      { volumeInfo: { title: "Harry Potter and the Chamber of Secrets", authors: ["J.K. Rowling"] } },
+      { volumeInfo: { title: "Harry Potter and the Chamber of Secrets", pageCount: 341, averageRating: 4.4,
+        description: "Harry returns to Hogwarts for a second year, only for a dark force to petrify students." } },
+    ] }) })) as unknown as typeof fetch;
+    const link = parseMediaLink("https://goodreads.com/book/show/15881-harry-potter-and-the-chamber-of-secrets")!;
+    const result = await fetchLinkInfo(link, fakeFetch);
+    assert.ok(result?.info["Synopsis"]?.includes("Hogwarts"));
+    assert.equal(result?.info["Author"], "J.K. Rowling");
+    assert.equal(result?.info["Pages"], "341");
+  });
+
   it("enriches a bare IMDb link keyless: Wikidata facts + Wikipedia synopsis", async () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       const u = String(input);
@@ -166,31 +179,39 @@ describe("Pasted media links", () => {
     assert.ok(/bohemian rhapsody/i.test(share!.slugTitle ?? ""));
   });
 
-  it("enriches a Spotify track: oEmbed name → MusicBrainz artist/album/length", async () => {
+  it("resolves the EXACT Spotify track via MusicBrainz URL lookup (not fuzzy title)", async () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       const u = String(input);
-      if (u.includes("oembed")) return { ok: true, json: async () => ({ title: "Bohemian Rhapsody" }) } as Response;
-      return { ok: true, json: async () => ({ recordings: [{
-        title: "Bohemian Rhapsody", length: 354_000,
-        "artist-credit": [{ name: "Queen" }], "first-release-date": "1975-10-31",
-        releases: [{ title: "A Night at the Opera", date: "1975-11-21" }] }] }) } as Response;
+      if (u.includes("/url?resource=")) {
+        // URL relationship → the exact recording id.
+        return { ok: true, json: async () => ({ relations: [{ recording: { id: "rec-123", title: "Sunsets" } }] }) } as Response;
+      }
+      if (u.includes("/recording/rec-123")) {
+        return { ok: true, json: async () => ({ title: "Sunsets", length: 287_000,
+          "artist-credit": [{ name: "Powderfinger" }], "first-release-date": "2011-01-01",
+          releases: [{ title: "Golden Rule", date: "2011" }] }) } as Response;
+      }
+      // A fuzzy title search WOULD return the wrong artist — must not be used.
+      return { ok: true, json: async () => ({ recordings: [{ title: "Sunsets",
+        "artist-credit": [{ name: "Hikkadua" }] }] }) } as Response;
     }) as unknown as typeof fetch;
 
-    const link = parseMediaLink("https://open.spotify.com/track/6rqhFgbbKwnb9MLmUQDhG6")!;
+    const link = parseMediaLink("https://open.spotify.com/track/1dXFZeIjgDJ8sAc1csFNY2")!;
     const result = await fetchLinkInfo(link, fakeFetch);
-    assert.equal(result?.title, "Bohemian Rhapsody");
-    assert.equal(result?.info["Artist"], "Queen");
-    assert.equal(result?.info["Album"], "A Night at the Opera");
-    assert.equal(result?.info["Length"], "5:54");
+    assert.equal(result?.title, "Sunsets");
+    assert.equal(result?.info["Artist"], "Powderfinger"); // NOT Hikkadua
+    assert.equal(result?.info["Length"], "4:47");
   });
 
-  it("enriches a Spotify album via MusicBrainz release-group", async () => {
+  it("resolves a Spotify album via MusicBrainz URL lookup", async () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       const u = String(input);
-      if (u.includes("oembed")) return { ok: true, json: async () => ({ title: "A Night at the Opera" }) } as Response;
-      return { ok: true, json: async () => ({ "release-groups": [{
-        title: "A Night at the Opera", "artist-credit": [{ name: "Queen" }],
-        "first-release-date": "1975-11-21", "primary-type": "Album" }] }) } as Response;
+      if (u.includes("/url?resource=")) {
+        return { ok: true, json: async () => ({ relations: [{ "release-group": {
+          title: "A Night at the Opera", "artist-credit": [{ name: "Queen" }],
+          "first-release-date": "1975-11-21" } }] }) } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
     }) as unknown as typeof fetch;
 
     const link = parseMediaLink("https://open.spotify.com/album/4LH4d3cOWNNsVw41Gqt2kv")!;
@@ -199,6 +220,21 @@ describe("Pasted media links", () => {
     assert.equal(result?.info["Artist"], "Queen");
     assert.equal(result?.info["Released"], "1975");
     assert.equal(result?.info["Type"], "Album");
+  });
+
+  it("share-text music (no Spotify URL) falls back to a name search", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("/recording?query=")) {
+        return { ok: true, json: async () => ({ recordings: [{ title: "Sunsets",
+          "artist-credit": [{ name: "Powderfinger" }], "first-release-date": "2011",
+          releases: [{ title: "Golden Rule" }] }] }) } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+    const link = parseMediaLink("Sunsets by Powderfinger | Spotify https://spotify.link/x")!;
+    const result = await fetchLinkInfo(link, fakeFetch);
+    assert.equal(result?.info["Artist"], "Powderfinger");
   });
 
   it("fails soft when offline", async () => {
