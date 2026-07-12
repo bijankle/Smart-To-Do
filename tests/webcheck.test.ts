@@ -1,42 +1,31 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { conceptsFromResults, lookupMediaConcepts } from "../src/sync/webcheck.js";
+import { isKnownMusic, lookupMediaConcepts } from "../src/sync/webcheck.js";
 
-describe("Background media check (iTunes catalogue)", () => {
-  it("maps result kinds to concepts, requiring an exact name match", () => {
-    const results = [
-      { kind: "song", trackName: "Bohemian Rhapsody", artistName: "Queen" },
-      { kind: "feature-movie", trackName: "Dune" },
-      { kind: "ebook", trackName: "Project Hail Mary", artistName: "Andy Weir" },
-      { wrapperType: "artist", artistName: "Flume" },
-    ];
-    assert.deepEqual(conceptsFromResults("bohemian rhapsody", results), ["music"]);
-    assert.deepEqual(conceptsFromResults("dune", results), ["films"]);
-    assert.deepEqual(conceptsFromResults("project hail mary", results), ["books"]);
-    assert.deepEqual(conceptsFromResults("flume", results), ["music"]);
-    // Fuzzy iTunes noise must NOT match: no result is named "fix the fence".
-    assert.deepEqual(conceptsFromResults("fix the fence", results), []);
+describe("Background music check (MusicBrainz)", () => {
+  it("requires a high-confidence exact name match", () => {
+    const artists = [{ name: "Queen", score: 100 }];
+    const recordings = [{ title: "Bohemian Rhapsody", score: 100 }];
+    assert.equal(isKnownMusic("Queen", artists, recordings, []), true);
+    assert.equal(isKnownMusic("Bohemian Rhapsody", artists, recordings, []), true);
+    // Fuzzy low-score junk must not match.
+    assert.equal(isKnownMusic("fix the fence", [{ name: "fix", score: 40 }], [], []), false);
   });
 
-  it("strips capture verbs and survives network failure silently", async () => {
-    const seen: string[] = [];
-    const fakeFetch = (async (url: string | URL | Request) => {
-      seen.push(String(url));
-      return {
-        ok: true,
-        json: async () => ({
-          results: [{ kind: "feature-movie", trackName: "Oppenheimer" }],
-        }),
-      } as Response;
-    }) as typeof fetch;
-
-    const concepts = await lookupMediaConcepts("watch oppenheimer", fakeFetch);
-    assert.deepEqual(concepts, ["films"]);
-    assert.ok(seen[0]!.includes("term=oppenheimer"));
-
-    const failing = (async () => {
-      throw new Error("offline");
+  it("tags a known artist and ignores obvious to-dos", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("/artist")) return { ok: true, json: async () => ({ artists: [{ name: "Flume", score: 100 }] }) } as Response;
+      return { ok: true, json: async () => ({ recordings: [] }) } as Response;
     }) as unknown as typeof fetch;
-    assert.deepEqual(await lookupMediaConcepts("watch oppenheimer", failing), []);
+    assert.deepEqual(await lookupMediaConcepts("listen to Flume", fakeFetch), ["music"]);
+
+    const empty = (async () => ({ ok: true, json: async () => ({ artists: [], recordings: [] }) })) as unknown as typeof fetch;
+    assert.deepEqual(await lookupMediaConcepts("email the accountant about tax", empty), []);
+  });
+
+  it("fails soft when offline", async () => {
+    const failing = (async () => { throw new Error("offline"); }) as unknown as typeof fetch;
+    assert.deepEqual(await lookupMediaConcepts("Flume", failing), []);
   });
 });

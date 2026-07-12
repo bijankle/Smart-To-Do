@@ -51,19 +51,19 @@ describe("Pasted media links", () => {
     assert.ok(result?.info["Synopsis"]?.includes("Ryland Grace"));
   });
 
-  it("enriches a bare IMDb link: Wikidata title → iTunes synopsis/duration", async () => {
+  it("enriches a bare IMDb link keyless: Wikidata facts + Wikipedia synopsis", async () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       const u = String(input);
       if (u.includes("wikidata")) {
-        return { ok: true, json: async () => ({
-          results: { bindings: [{ filmLabel: { value: "Oppenheimer" }, date: { value: "2023-07-21T00:00:00Z" } }] },
-        }) } as Response;
+        return { ok: true, json: async () => ({ results: { bindings: [{
+          filmLabel: { value: "Oppenheimer" }, directorLabel: { value: "Christopher Nolan" },
+          date: { value: "2023-07-21T00:00:00Z" }, duration: { value: "180" },
+          genreLabel: { value: "biographical film" },
+          article: { value: "https://en.wikipedia.org/wiki/Oppenheimer_(film)" } }] } }) } as Response;
       }
-      return { ok: true, json: async () => ({ results: [{
-        kind: "feature-movie", trackName: "Oppenheimer", artistName: "Christopher Nolan",
-        releaseDate: "2023-07-21T00:00:00Z", primaryGenreName: "Drama",
-        trackTimeMillis: 10_800_000, longDescription: "The story of J. Robert Oppenheimer and the atomic bomb.",
-        contentAdvisoryRating: "MA15+" }] }) } as Response;
+      // Wikipedia REST summary
+      return { ok: true, json: async () => ({ title: "Oppenheimer",
+        extract: "Oppenheimer is a 2023 epic biographical thriller film about J. Robert Oppenheimer.", type: "standard" }) } as Response;
     }) as unknown as typeof fetch;
 
     const link = parseMediaLink("https://www.imdb.com/title/tt15398776/")!;
@@ -127,22 +127,24 @@ describe("Pasted media links", () => {
     assert.equal(gr?.kind, "goodreads-share");
   });
 
-  it("enriches a share-text film by title via the movie catalogue", async () => {
-    const fakeFetch = (async () => ({
-      ok: true,
-      json: async () => ({
-        results: [
-          { kind: "feature-movie", trackName: "The Matrix", artistName: "Lana Wachowski & Lilly Wachowski", releaseDate: "1999-03-31T00:00:00Z", primaryGenreName: "Sci-Fi & Fantasy", trackTimeMillis: 8_160_000, longDescription: "A computer hacker learns the true nature of reality." },
-          { kind: "feature-movie", trackName: "The Matrix Reloaded", releaseDate: "2003-05-15T00:00:00Z" },
-        ],
-      }),
-    })) as unknown as typeof fetch;
+  it("enriches a share-text film keyless via Wikidata + Wikipedia", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("wikidata")) {
+        return { ok: true, json: async () => ({ results: { bindings: [{
+          filmLabel: { value: "The Matrix" }, directorLabel: { value: "The Wachowskis" },
+          date: { value: "1999-03-31T00:00:00Z" }, duration: { value: "136" },
+          genreLabel: { value: "science fiction film" },
+          article: { value: "https://en.wikipedia.org/wiki/The_Matrix" } }] } }) } as Response;
+      }
+      return { ok: true, json: async () => ({ title: "The Matrix",
+        extract: "The Matrix is a 1999 science fiction film in which a computer hacker learns the true nature of reality.", type: "standard" }) } as Response;
+    }) as unknown as typeof fetch;
 
     const link = parseMediaLink("The Matrix (1999) - IMDb https://share.google/xyz")!;
     const result = await fetchLinkInfo(link, fakeFetch);
     assert.equal(result?.title, "The Matrix");
     assert.equal(result?.info["Year"], "1999");
-    assert.equal(result?.info["Genre"], "Sci-Fi & Fantasy");
     assert.equal(result?.info["Duration"], "2h 16m");
     assert.ok(result?.info["Synopsis"]?.includes("hacker"));
   });
@@ -164,17 +166,14 @@ describe("Pasted media links", () => {
     assert.ok(/bohemian rhapsody/i.test(share!.slugTitle ?? ""));
   });
 
-  it("enriches a Spotify track: oEmbed name → iTunes artist/album/duration", async () => {
+  it("enriches a Spotify track: oEmbed name → MusicBrainz artist/album/length", async () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       const u = String(input);
-      if (u.includes("oembed")) {
-        return { ok: true, json: async () => ({ title: "Bohemian Rhapsody" }) } as Response;
-      }
-      return { ok: true, json: async () => ({ results: [{
-        wrapperType: "track", kind: "song", trackName: "Bohemian Rhapsody",
-        artistName: "Queen", collectionName: "A Night at the Opera",
-        releaseDate: "1975-10-31T00:00:00Z", primaryGenreName: "Rock",
-        trackTimeMillis: 354_000 }] }) } as Response;
+      if (u.includes("oembed")) return { ok: true, json: async () => ({ title: "Bohemian Rhapsody" }) } as Response;
+      return { ok: true, json: async () => ({ recordings: [{
+        title: "Bohemian Rhapsody", length: 354_000,
+        "artist-credit": [{ name: "Queen" }], "first-release-date": "1975-10-31",
+        releases: [{ title: "A Night at the Opera", date: "1975-11-21" }] }] }) } as Response;
     }) as unknown as typeof fetch;
 
     const link = parseMediaLink("https://open.spotify.com/track/6rqhFgbbKwnb9MLmUQDhG6")!;
@@ -185,21 +184,20 @@ describe("Pasted media links", () => {
     assert.equal(result?.info["Length"], "5:54");
   });
 
-  it("enriches a Spotify album with artist and track count", async () => {
+  it("enriches a Spotify album via MusicBrainz release-group", async () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       const u = String(input);
       if (u.includes("oembed")) return { ok: true, json: async () => ({ title: "A Night at the Opera" }) } as Response;
-      return { ok: true, json: async () => ({ results: [{
-        wrapperType: "collection", collectionName: "A Night at the Opera",
-        artistName: "Queen", releaseDate: "1975-11-21T00:00:00Z",
-        primaryGenreName: "Rock", trackCount: 12 }] }) } as Response;
+      return { ok: true, json: async () => ({ "release-groups": [{
+        title: "A Night at the Opera", "artist-credit": [{ name: "Queen" }],
+        "first-release-date": "1975-11-21", "primary-type": "Album" }] }) } as Response;
     }) as unknown as typeof fetch;
 
     const link = parseMediaLink("https://open.spotify.com/album/4LH4d3cOWNNsVw41Gqt2kv")!;
     const result = await fetchLinkInfo(link, fakeFetch);
     assert.equal(result?.title, "A Night at the Opera");
     assert.equal(result?.info["Artist"], "Queen");
-    assert.equal(result?.info["Tracks"], "12");
+    assert.equal(result?.info["Released"], "1975");
     assert.equal(result?.info["Type"], "Album");
   });
 

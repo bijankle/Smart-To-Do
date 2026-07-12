@@ -175,61 +175,66 @@ async function fetchBookInfo(link: MediaLink, fetchFn: typeof fetch): Promise<Li
   return { title: v.title ?? titleCase(query), info };
 }
 
-/** Resolve a bare IMDb id to a title (+ year) via Wikidata's IMDb index. */
-async function titleFromImdbId(id: string, fetchFn: typeof fetch): Promise<{ title: string; year: string | null } | null> {
+/** Wikipedia REST summary (CORS-enabled) → synopsis + canonical title. */
+async function wikipediaSummary(pageTitle: string, fetchFn: typeof fetch): Promise<{ title: string; extract: string } | null> {
+  const slug = encodeURIComponent(pageTitle.trim().replace(/\s+/g, "_"));
+  const response = await fetchFn(`https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`);
+  if (!response.ok) return null;
+  const d = (await response.json()) as { title?: string; extract?: string; type?: string };
+  if (!d.extract || d.type === "disambiguation") return null;
+  return { title: d.title ?? pageTitle, extract: d.extract };
+}
+
+interface FilmFacts {
+  title: string;
+  director: string | null;
+  year: string | null;
+  durationMin: number | null;
+  genre: string | null;
+  wikiTitle: string | null;
+}
+
+/** Film facts from Wikidata (CORS-enabled) by IMDb id or by title. */
+async function wikidataFilm(link: MediaLink, fetchFn: typeof fetch): Promise<FilmFacts | null> {
+  const where = link.id
+    ? `?film wdt:P345 "${link.id}".`
+    : `?film rdfs:label ${JSON.stringify(link.slugTitle ?? "")}@en. ?film wdt:P31/wdt:P279* wd:Q11424.`;
   const sparql =
-    `SELECT ?filmLabel ?date WHERE { ?film wdt:P345 "${id}". ` +
-    `OPTIONAL { ?film wdt:P577 ?date. } ` +
-    `SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } LIMIT 1`;
+    `SELECT ?filmLabel ?directorLabel ?date ?duration ?genreLabel ?article WHERE { ${where} ` +
+    `OPTIONAL { ?film wdt:P57 ?director. } OPTIONAL { ?film wdt:P577 ?date. } ` +
+    `OPTIONAL { ?film wdt:P2047 ?duration. } OPTIONAL { ?film wdt:P136 ?genre. } ` +
+    `OPTIONAL { ?article schema:about ?film; schema:isPartOf <https://en.wikipedia.org/>. } ` +
+    `SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } LIMIT 20`;
   const url = "https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(sparql);
   const response = await fetchFn(url);
   if (!response.ok) return null;
-  const data = (await response.json()) as {
-    results?: { bindings?: Array<{ filmLabel?: { value: string }; date?: { value: string } }> };
+  const rows =
+    ((await response.json()) as {
+      results?: {
+        bindings?: Array<{
+          filmLabel?: { value: string };
+          directorLabel?: { value: string };
+          date?: { value: string };
+          duration?: { value: string };
+          genreLabel?: { value: string };
+          article?: { value: string };
+        }>;
+      };
+    }).results?.bindings ?? [];
+  if (rows.length === 0 || !rows[0]!.filmLabel?.value) return null;
+
+  const distinct = (vs: Array<string | undefined>) => [...new Set(vs.filter((v): v is string => Boolean(v)))];
+  const article = rows.find((r) => r.article?.value)?.article?.value;
+  return {
+    title: rows[0]!.filmLabel!.value,
+    director: distinct(rows.map((r) => r.directorLabel?.value)).slice(0, 2).join(", ") || null,
+    year: rows.find((r) => r.date?.value)?.date?.value?.slice(0, 4) ?? null,
+    durationMin: rows.find((r) => r.duration?.value)?.duration?.value
+      ? Math.round(parseFloat(rows.find((r) => r.duration?.value)!.duration!.value))
+      : null,
+    genre: distinct(rows.map((r) => r.genreLabel?.value)).slice(0, 2).join(", ") || null,
+    wikiTitle: article ? decodeURIComponent(article.split("/wiki/")[1] ?? "").replace(/_/g, " ") : null,
   };
-  const row = data.results?.bindings?.[0];
-  if (!row?.filmLabel?.value) return null;
-  return { title: row.filmLabel.value, year: row.date?.value?.slice(0, 4) ?? null };
-}
-
-interface ItunesMovie {
-  kind?: string;
-  trackName?: string;
-  artistName?: string;
-  releaseDate?: string;
-  primaryGenreName?: string;
-  longDescription?: string;
-  shortDescription?: string;
-  trackTimeMillis?: number;
-  contentAdvisoryRating?: string;
-}
-
-/** Rich film info from the keyless iTunes movie catalogue, by title. */
-async function fetchFilmByTitle(title: string, year: string | null, fetchFn: typeof fetch): Promise<LinkInfo | null> {
-  const url =
-    "https://itunes.apple.com/search?media=movie&limit=10&country=AU&term=" +
-    encodeURIComponent(title);
-  const response = await fetchFn(url);
-  if (!response.ok) return null;
-  const data = (await response.json()) as { results?: ItunesMovie[] };
-  const target = normalize(title);
-  const candidates = (data.results ?? []).filter(
-    (r) => r.kind === "feature-movie" && normalize(r.trackName) === target,
-  );
-  const match = candidates.find((r) => year && r.releaseDate?.startsWith(year)) ?? candidates[0];
-  if (!match) return null;
-
-  const info: Record<string, string> = {};
-  const synopsis = trimSynopsis(match.longDescription ?? match.shortDescription);
-  if (synopsis) info["Synopsis"] = synopsis;
-  if (match.artistName) info["Director"] = match.artistName;
-  const y = match.releaseDate?.slice(0, 4) ?? year;
-  if (y) info["Year"] = y;
-  const duration = formatDuration(match.trackTimeMillis);
-  if (duration) info["Duration"] = duration;
-  if (match.primaryGenreName) info["Genre"] = match.primaryGenreName;
-  if (match.contentAdvisoryRating) info["Rated"] = match.contentAdvisoryRating;
-  return { title: match.trackName ?? title, info };
 }
 
 interface OmdbMovie {
@@ -272,32 +277,25 @@ async function fetchFilmInfo(link: MediaLink, omdbKey: string | null, fetchFn: t
     const viaOmdb = await fetchFilmOmdb(link, omdbKey, fetchFn);
     if (viaOmdb) return viaOmdb;
   }
-  // Keyless: resolve a title (bare imdb id → Wikidata), then iTunes for detail.
-  let title = link.slugTitle;
-  let year = link.year;
-  if (!title && link.id) {
-    const resolved = await titleFromImdbId(link.id, fetchFn);
-    if (!resolved) return null;
-    title = resolved.title;
-    year = year ?? resolved.year;
-  }
+  // Keyless, all CORS-enabled: Wikidata facts + Wikipedia synopsis.
+  const facts = await wikidataFilm(link, fetchFn);
+  const title = facts?.title ?? link.slugTitle;
   if (!title) return null;
-  return fetchFilmByTitle(title, year, fetchFn);
+  const info: Record<string, string> = {};
+  const wiki = await wikipediaSummary(facts?.wikiTitle ?? title, fetchFn);
+  const synopsis = trimSynopsis(wiki?.extract);
+  if (synopsis) info["Synopsis"] = synopsis;
+  if (facts?.director) info["Director"] = facts.director;
+  const year = facts?.year ?? link.year;
+  if (year) info["Year"] = year;
+  const duration = formatDuration(undefined, facts?.durationMin ? `${facts.durationMin}` : undefined);
+  if (duration) info["Duration"] = duration;
+  if (facts?.genre) info["Genre"] = facts.genre;
+  if (Object.keys(info).length === 0) return null;
+  return { title: wiki?.title ?? title, info };
 }
 
-interface ItunesMusic {
-  wrapperType?: string;
-  kind?: string;
-  trackName?: string;
-  collectionName?: string;
-  artistName?: string;
-  releaseDate?: string;
-  primaryGenreName?: string;
-  trackTimeMillis?: number;
-  trackCount?: number;
-}
-
-/** Spotify oEmbed (keyless) resolves a bare track/album/artist URL to a name. */
+/** Spotify oEmbed (keyless, CORS) resolves a bare track/album/artist URL to a name. */
 async function nameFromSpotify(url: string, fetchFn: typeof fetch): Promise<string | null> {
   const endpoint = "https://open.spotify.com/oembed?url=" + encodeURIComponent(url);
   const response = await fetchFn(endpoint);
@@ -306,49 +304,71 @@ async function nameFromSpotify(url: string, fetchFn: typeof fetch): Promise<stri
   return data.title?.trim() || null;
 }
 
-/** Rich music info from the keyless iTunes/Apple Music catalogue. */
+interface MbArtistCredit { name?: string }
+interface MbRelease { title?: string; date?: string }
+interface MbRecording {
+  title?: string;
+  length?: number;
+  "artist-credit"?: MbArtistCredit[];
+  "first-release-date"?: string;
+  releases?: MbRelease[];
+}
+interface MbReleaseGroup {
+  title?: string;
+  "artist-credit"?: MbArtistCredit[];
+  "first-release-date"?: string;
+  "primary-type"?: string;
+}
+interface MbArtist { name?: string; type?: string; country?: string; disambiguation?: string }
+
+/** Music info from MusicBrainz (CORS-enabled, keyless). */
 async function fetchMusicInfo(link: MediaLink, fetchFn: typeof fetch): Promise<LinkInfo | null> {
   let query = link.slugTitle;
   if (!query && link.url) query = await nameFromSpotify(link.url, fetchFn);
   if (!query) return null;
-
-  const entity = link.entity ?? "track";
-  const entityParam = entity === "album" ? "album" : entity === "artist" ? "musicArtist" : "song";
-  const url =
-    `https://itunes.apple.com/search?media=music&entity=${entityParam}&limit=12&country=AU&term=` +
-    encodeURIComponent(query);
-  const response = await fetchFn(url);
-  if (!response.ok) return null;
-  const results = ((await response.json()) as { results?: ItunesMusic[] }).results ?? [];
+  const term = encodeURIComponent(query);
   const target = normalize(query);
+  const entity = link.entity ?? "track";
+  const base = "https://musicbrainz.org/ws/2";
 
   if (entity === "artist") {
-    const m = results.find((r) => normalize(r.artistName) === target) ?? results[0];
-    if (!m?.artistName) return null;
+    const r = await fetchFn(`${base}/artist?query=${term}&fmt=json&limit=5`);
+    if (!r.ok) return null;
+    const list = ((await r.json()) as { artists?: MbArtist[] }).artists ?? [];
+    const a = list.find((x) => normalize(x.name) === target) ?? list[0];
+    if (!a?.name) return null;
     const info: Record<string, string> = { Type: "Artist" };
-    if (m.primaryGenreName) info["Genre"] = m.primaryGenreName;
-    return { title: m.artistName, info };
+    if (a.disambiguation) info["About"] = a.disambiguation;
+    if (a.country) info["Country"] = a.country;
+    return { title: a.name, info };
   }
   if (entity === "album") {
-    const m = results.find((r) => normalize(r.collectionName) === target) ?? results[0];
-    if (!m?.collectionName) return null;
+    const r = await fetchFn(`${base}/release-group?query=${term}&fmt=json&limit=5`);
+    if (!r.ok) return null;
+    const list = ((await r.json()) as { "release-groups"?: MbReleaseGroup[] })["release-groups"] ?? [];
+    const g = list.find((x) => normalize(x.title) === target) ?? list[0];
+    if (!g?.title) return null;
     const info: Record<string, string> = { Type: "Album" };
-    if (m.artistName) info["Artist"] = m.artistName;
-    if (m.releaseDate) info["Released"] = m.releaseDate.slice(0, 4);
-    if (m.trackCount) info["Tracks"] = String(m.trackCount);
-    if (m.primaryGenreName) info["Genre"] = m.primaryGenreName;
-    return { title: m.collectionName, info };
+    const artist = g["artist-credit"]?.map((c) => c.name).filter(Boolean).join(", ");
+    if (artist) info["Artist"] = artist;
+    if (g["first-release-date"]) info["Released"] = g["first-release-date"].slice(0, 4);
+    return { title: g.title, info };
   }
-  const m = results.find((r) => normalize(r.trackName) === target) ?? results[0];
-  if (!m?.trackName) return null;
+  const r = await fetchFn(`${base}/recording?query=${term}&fmt=json&limit=8`);
+  if (!r.ok) return null;
+  const list = ((await r.json()) as { recordings?: MbRecording[] }).recordings ?? [];
+  const rec = list.find((x) => normalize(x.title) === target) ?? list[0];
+  if (!rec?.title) return null;
   const info: Record<string, string> = { Type: "Song" };
-  if (m.artistName) info["Artist"] = m.artistName;
-  if (m.collectionName) info["Album"] = m.collectionName;
-  if (m.releaseDate) info["Released"] = m.releaseDate.slice(0, 4);
-  const length = formatTrackLength(m.trackTimeMillis);
+  const artist = rec["artist-credit"]?.map((c) => c.name).filter(Boolean).join(", ");
+  if (artist) info["Artist"] = artist;
+  const album = rec.releases?.[0]?.title;
+  if (album) info["Album"] = album;
+  const year = rec["first-release-date"]?.slice(0, 4) ?? rec.releases?.[0]?.date?.slice(0, 4);
+  if (year) info["Released"] = year;
+  const length = formatTrackLength(rec.length);
   if (length) info["Length"] = length;
-  if (m.primaryGenreName) info["Genre"] = m.primaryGenreName;
-  return { title: m.trackName, info };
+  return { title: rec.title, info };
 }
 
 export async function fetchLinkInfo(
