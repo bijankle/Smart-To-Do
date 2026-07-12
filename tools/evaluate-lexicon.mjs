@@ -106,6 +106,16 @@ const CASES = [
   ["tomatoe sauce", [C]], ["shampoo and conditionar", [C, CW]],
   ["scr3ws", [B]], ["keybord", [JB]], ["blueberrys", [C]],
   ["toilat paper", [C]], ["sunscren", [C, CW]],
+  // ---- expanded coverage: descriptive names & new vocab ----
+  ["1000-piece jigsaw puzzle", [KM]], ["waterproof playing cards", [KM], [OW]],
+  ["yoga mat (non-slip)", [KM]], ["resistance bands set", [KM]],
+  ["dotted bullet journal", [OW]], ["bicycle chain lubricant", [B]],
+  ["sofa bed", [IK]], ["tv unit", [IK], [JB]], ["casserole dish", [KM]],
+  ["glucosamine tablets", [CW]], ["fish oil capsules", [C, CW]],
+  ["compression stockings", [CW], [UQ]], ["subwoofer", [JB]],
+  ["mouse pad", [JB]], ["wall clock", [KM]], ["tablecloth", [KM]],
+  ["witch hazel toner", [KM, CW]], ["printer toner cartridge", [OW]],
+  ["caster sugar", [C]], ["hiking boots", [UQ]], ["balaclava", [UQ]],
 ];
 
 const repo = await Repository.open(new MemoryPersistence(), {});
