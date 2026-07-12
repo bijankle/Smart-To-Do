@@ -63,7 +63,7 @@ const CASES = [
   ["sprinkler", [B]], ["pavers", [B]], ["decking oil", [B], [C, CW]],
   ["fence palings", [B]], ["gate hinges", [B]], ["padlock", [B]],
   ["extension cord", [B], [JB]], ["light globes", [B], [C]],
-  ["screws and wall plugs", [B]], ["work gloves", [B], [UQ]],
+  ["screws and wall plugs", [B]], ["work gloves", [B], [UQ, KM]],
   // ---- JB Hi-Fi ----
   ["laptop", [JB]], ["gaming mouse", [JB]], ["mechanical keyboard", [JB]],
   ["webcam", [JB]], ["monitor", [JB]], ["soundbar", [JB]],
@@ -96,12 +96,12 @@ const CASES = [
   ["board games", [KM]], ["jigsaw puzzle", [KM]], ["drink bottles", [KM]],
   ["kids lunchbox", [KM]], ["pillows", [KM], [IK]], ["quilt cover", [KM], [IK]],
   ["tupperware", [KM]], ["wrapping paper", [KM], [OW, C]],
-  // ---- Uniqlo ----
-  ["plain t shirts", [UQ]], ["jeans", [UQ]], ["socks", [UQ]],
-  ["jocks", [UQ]], ["trackies", [UQ]], ["puffer jacket", [UQ]],
-  ["linen shirt", [UQ]], ["chinos", [UQ]], ["belt", [UQ]],
-  ["thermals", [UQ]], ["hoodie", [UQ]], ["work shirts", [UQ]],
-  ["running shoes", [UQ]], ["beanie", [UQ]],
+  // ---- Uniqlo (general apparel also files into Kmart, a department store) ----
+  ["plain t shirts", [UQ, KM]], ["jeans", [UQ, KM]], ["socks", [UQ, KM]],
+  ["jocks", [UQ, KM]], ["trackies", [UQ, KM]], ["puffer jacket", [UQ, KM]],
+  ["linen shirt", [UQ, KM]], ["chinos", [UQ, KM]], ["belt", [UQ, KM]],
+  ["thermals", [UQ, KM]], ["hoodie", [UQ, KM]], ["work shirts", [UQ, KM]],
+  ["running shoes", [UQ, KM]], ["beanie", [UQ, KM]],
   // ---- typo resilience ----
   ["tomatoe sauce", [C]], ["shampoo and conditionar", [C, CW]],
   ["scr3ws", [B]], ["keybord", [JB]], ["blueberrys", [C]],
@@ -112,10 +112,10 @@ const CASES = [
   ["dotted bullet journal", [OW]], ["bicycle chain lubricant", [B]],
   ["sofa bed", [IK]], ["tv unit", [IK], [JB]], ["casserole dish", [KM]],
   ["glucosamine tablets", [CW]], ["fish oil capsules", [C, CW]],
-  ["compression stockings", [CW], [UQ]], ["subwoofer", [JB]],
+  ["compression stockings", [CW], [UQ, KM]], ["subwoofer", [JB]],
   ["mouse pad", [JB]], ["wall clock", [KM]], ["tablecloth", [KM]],
   ["witch hazel toner", [KM, CW]], ["printer toner cartridge", [OW]],
-  ["caster sugar", [C]], ["hiking boots", [UQ]], ["balaclava", [UQ]],
+  ["caster sugar", [C]], ["hiking boots", [UQ, KM]], ["balaclava", [UQ, KM]],
   // ---- convenience foods, med abbreviations, brand eponyms ----
   ["ready meals", [C]], ["frozen lasagne", [C]], ["microwave rice", [C]],
   ["chicken nuggets", [C]], ["mg tablets", [CW]], ["vitamin d tablets", [CW]],

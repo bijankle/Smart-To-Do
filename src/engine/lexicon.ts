@@ -87,7 +87,7 @@ const RAW: RawConcept[] = [
   },
   {
     name: "clothing",
-    aliases: "clothing clothes apparel fashion wardrobe uniqlo zara myer cottonon",
+    aliases: "clothing clothes apparel fashion uniqlo zara myer cottonon",
     vocabulary:
       "shirt tshirt tee top pants jeans chino shorts trackie trackies tracksuit jacket puffer hoodie sweater jumper coat sock jocks undies underwear boxer brief bra dress skirt suit tie belt shoe sneaker runner running boot sandal thong scarf glove beanie hat cap pyjama legging singlet thermal blazer cardigan trouser polo swimsuit swimmer trunks activewear uniform vest denim flannel linen raincoat slipper heel loafer bikini blouse camisole fleece gown robe lingerie nightie nightwear tights sweatshirt slacks poncho shawl pashmina sarong waistcoat overalls dungaree cufflink knickers trainer stocking swim swimming hoody sunglasses sunnies corset kaftan romper nightgown swimwear underpants undershirt underclothes cargo tankini kilt necktie bonds champion adidas nike puma levis levi asics converse vans crocs ugg uggs chinos joggers trackpants windbreaker parka anorak turtleneck jumpsuit tunic kimono balaclava mittens brogues oxfords moccasins espadrilles slides flipflops wedges pumps peacoat trench gilet henley bralette bodysuit onesie playsuit shrug bowtie earmuffs sweatshirt activewear compression rashie boardshorts wetsuit tracksuit puffer windcheater skivvy",
   },
@@ -191,6 +191,27 @@ export function conceptForBucketName(name: string): Concept | null {
     if (words.some((w) => concept.aliases.has(w))) return concept;
   }
   return null;
+}
+
+/**
+ * Department stores stock more than their primary aisle: Kmart sells clothing
+ * and toys alongside homewares, so general apparel should file into Kmart too,
+ * not only Uniqlo. Maps a bucket-name alias to the EXTRA concepts it serves
+ * (beyond its primary from conceptForBucketName).
+ */
+const STORE_EXTRA_CONCEPTS: Array<{ alias: string; concepts: string[] }> = [
+  { alias: "kmart", concepts: ["clothing"] },
+  { alias: "target", concepts: ["clothing"] },
+  { alias: "bigw", concepts: ["clothing"] },
+];
+
+export function extraConceptsForBucketName(name: string): Set<string> {
+  const words = new Set(name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).map(stem));
+  const out = new Set<string>();
+  for (const { alias, concepts } of STORE_EXTRA_CONCEPTS) {
+    if (words.has(stem(alias))) concepts.forEach((c) => out.add(c));
+  }
+  return out;
 }
 
 /**

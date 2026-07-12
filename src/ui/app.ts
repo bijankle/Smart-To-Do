@@ -69,7 +69,7 @@ const LOOKUP_CACHE_KEY = "smart-to-do/lookup-cache";
 const LOOKUP_MIN_INTERVAL_MS = 6500;
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v14 · live lookup";
+const APP_VERSION = "v15 · clothing at kmart";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 

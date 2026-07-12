@@ -156,6 +156,19 @@ describe("Seed lexicon", () => {
     assert.deepEqual(repo.addTask("printer toner cartridge").buckets, ["Officeworks"]);
   });
 
+  it("files general clothing into Kmart as well as Uniqlo", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    for (const b of ["Uniqlo", "Kmart", "Ikea"]) repo.createBucket(b);
+    assert.deepEqual(repo.addTask("jacket").buckets.sort(), ["Kmart", "Uniqlo"]);
+    assert.deepEqual(repo.addTask("socks").buckets.sort(), ["Kmart", "Uniqlo"]);
+    // A wardrobe is furniture, not apparel.
+    assert.deepEqual(repo.addTask("wardrobe").buckets, ["Ikea"]);
+    // Without a Kmart pill, clothing still just goes to Uniqlo.
+    const solo = await Repository.open(new MemoryPersistence(), makeOptions());
+    solo.createBucket("Uniqlo");
+    assert.deepEqual(solo.addTask("jacket").buckets, ["Uniqlo"]);
+  });
+
   it("matches a decisive single word ('laptop')", () => {
     assert.deepEqual(names(matchConcepts(tokenize("laptop"))), ["electronics"]);
   });

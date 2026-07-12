@@ -309,7 +309,8 @@ describe("Repository — bespoke store setup", () => {
     assert.deepEqual(repo.addTask("stapler and paper").buckets, ["Officeworks"]);
     assert.deepEqual(repo.addTask("bookshelf and cushions").buckets, ["Ikea"]);
     assert.deepEqual(repo.addTask("storage tubs and hangers").buckets, ["Kmart"]);
-    assert.deepEqual(repo.addTask("socks and jeans").buckets, ["Uniqlo"]);
+    // General apparel files into both Uniqlo and Kmart (a department store).
+    assert.deepEqual(repo.addTask("socks and jeans").buckets.sort(), ["Kmart", "Uniqlo"]);
   });
 });
 

@@ -15,7 +15,13 @@
  */
 
 import { classify, createModel, ensureBucket, seed, train, untrain } from "../engine/classify.js";
-import { CONCEPTS, conceptForBucketName, matchConcepts, type Concept } from "../engine/lexicon.js";
+import {
+  CONCEPTS,
+  conceptForBucketName,
+  extraConceptsForBucketName,
+  matchConcepts,
+  type Concept,
+} from "../engine/lexicon.js";
 import { tokenize } from "../engine/tokenize.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD } from "../engine/parse.js";
 import {
@@ -308,7 +314,11 @@ export class Repository {
   }
 
   private liveBucketsForConcept(concept: Concept): string[] {
-    return this.listBuckets().filter((name) => conceptForBucketName(name) === concept);
+    return this.listBuckets().filter(
+      (name) =>
+        conceptForBucketName(name) === concept ||
+        extraConceptsForBucketName(name).has(concept.name),
+    );
   }
 
   /** Live buckets mapped to a concept name (for the online product lookup). */
