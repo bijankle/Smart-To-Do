@@ -91,7 +91,7 @@ export class Repository {
    */
   applyStoreSetup(stores: string[], remap: Record<string, string>): boolean {
     const version = this.doc.setupVersion ?? 0;
-    if (version >= 5) return false;
+    if (version >= 6) return false;
 
     if (version < 2) this.applyPillSetup(stores, remap);
     // v4: the media feature (songs/films/books) was removed — drop those pills
@@ -101,11 +101,21 @@ export class Repository {
     // v5: the "Computer" pill was renamed "Computer tasks" — carry its tasks
     // and training across before it disappears.
     if (version < 5) this.foldBucket("Computer", "Computer tasks");
+    // v6: new pills added (e.g. Outdoor) — create any the user has never had,
+    // without resurrecting ones they deliberately deleted.
+    if (version < 6) this.ensureNewPills(stores);
     this.rebuildClassifier();
     this.retagAuto();
-    this.doc.setupVersion = 5;
+    this.doc.setupVersion = 6;
     this.scheduleSave();
     return true;
+  }
+
+  /** Create pills that have never existed (skips live and tombstoned names). */
+  private ensureNewPills(stores: string[]): void {
+    for (const name of stores) {
+      if (!this.doc.buckets[name]) this.createBucket(name);
+    }
   }
 
   /**
@@ -406,6 +416,27 @@ export class Repository {
       }
     }
     if (changed) this.scheduleSave();
+  }
+
+  /**
+   * One-off heal: strip Markdown table pipes from existing task titles, so
+   * lists pasted before pipe-cleaning existed ("| Camping hammock |") read
+   * cleanly. Idempotent — a title with no pipes is left untouched.
+   */
+  stripTitleFormatting(): number {
+    const ts = this.now().toISOString();
+    let count = 0;
+    for (const task of Object.values(this.doc.tasks)) {
+      if (task.deletedAt !== null || !task.title.includes("|")) continue;
+      const cleaned = task.title.replace(/\|/g, " ").replace(/\s+/g, " ").trim();
+      if (cleaned && cleaned !== task.title) {
+        task.title = cleaned;
+        task.modifiedAt = ts;
+        count++;
+      }
+    }
+    if (count > 0) this.scheduleSave();
+    return count;
   }
 
   /**

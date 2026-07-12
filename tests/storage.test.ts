@@ -289,6 +289,16 @@ describe("Repository — bespoke store setup", () => {
     assert.equal(repo.listCompleted("all").length, 1);
   });
 
+  it("strips Markdown table pipes from existing task titles", async () => {
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    const t = repo.addTask("| Camping hammock |");
+    const clean = repo.addTask("Water bottle");
+    assert.equal(repo.stripTitleFormatting(), 1); // only the piped one changes
+    assert.equal(repo.getTask(t.id)!.title, "Camping hammock");
+    assert.equal(repo.getTask(clean.id)!.title, "Water bottle");
+    assert.equal(repo.stripTitleFormatting(), 0); // idempotent
+  });
+
   it("auto-tags everyday captures into the right store", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.applyStoreSetup(STORES, REMAP);

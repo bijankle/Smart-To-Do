@@ -45,6 +45,7 @@ const MY_PILLS = [
   "Ikea",
   "Kmart",
   "Uniqlo",
+  "Outdoor",
   // Life categories
   "Medical",
   "Computer tasks",
@@ -63,7 +64,7 @@ const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v9 · undo redo";
+const APP_VERSION = "v10 · outdoor + cleanup";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -126,12 +127,28 @@ function captureOne(raw: string): void {
 }
 
 /**
- * Capture one OR many tasks: pasting a list (e.g. copied from Google Keep)
- * adds one task per non-empty line, each auto-tagged on its own, instead of
- * mashing the whole list into a single item.
+ * Strip pasted-list noise from a line: Markdown table pipes and leading
+ * bullets/blockquote/numbering, so pasting a table or bulleted list yields
+ * clean task titles instead of "| Bicycle chain lubricant |".
+ */
+function cleanCaptureLine(raw: string): string {
+  return raw
+    .replace(/\|/g, " ") // table column separators
+    .replace(/^\s*(?:[-*+•>]|\d+[.)])\s+/, "") // bullets, "1." / "1)" numbering
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Capture one OR many tasks: pasting a list (e.g. copied from Google Keep or a
+ * Markdown table) adds one task per line, cleaned of pipes/bullets and each
+ * auto-tagged on its own, instead of mashing the whole list into one item.
  */
 function submitCapture(raw: string): void {
-  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = raw
+    .split(/\r?\n/)
+    .map(cleanCaptureLine)
+    .filter((line) => /[a-z0-9]/i.test(line)); // drop separator rows like |---|---|
   if (lines.length === 0) return;
   snapshot();
   for (const line of lines) captureOne(line);
@@ -730,6 +747,7 @@ function render(): void {
 async function main(): Promise<void> {
   repo = await Repository.open(new WebStoragePersistence(window.localStorage));
   repo.applyStoreSetup(MY_PILLS, GENERIC_REMAP);
+  repo.stripTitleFormatting();
   repo.retagUntagged();
   $("#capture").addEventListener("submit", handleCapture as EventListener);
   $("#capture-input").addEventListener("keydown", handleCaptureKeydown as EventListener);

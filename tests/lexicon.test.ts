@@ -137,6 +137,25 @@ describe("Seed lexicon", () => {
     assert.deepEqual(repo.addTask("backup photos and update drivers").buckets, ["Computer"]);
   });
 
+  it("adds an Outdoor category and keeps fitness gear out of Medical", async () => {
+    assert.equal(conceptForBucketName("Outdoor")?.name, "outdoor");
+    const repo = await Repository.open(new MemoryPersistence(), makeOptions());
+    for (const b of ["Coles", "Chemist Warehouse", "Kmart", "Outdoor", "Medical", "Officeworks"]) {
+      repo.createBucket(b);
+    }
+    // Descriptive filler ("non-slip", "1000-piece", "set") no longer suppresses
+    // the real product noun.
+    assert.deepEqual(repo.addTask("yoga mat (non-slip)").buckets, ["Kmart"]);
+    assert.deepEqual(repo.addTask("1000-piece jigsaw puzzle").buckets, ["Kmart"]);
+    assert.deepEqual(repo.addTask("resistance bands set").buckets, ["Kmart"]);
+    // Outdoor gear routes to the new pill.
+    assert.deepEqual(repo.addTask("camping hammock").buckets, ["Outdoor"]);
+    assert.deepEqual(repo.addTask("kayak paddle").buckets, ["Outdoor"]);
+    // Beauty toner → Kmart + Chemist (and printer toner still Officeworks).
+    assert.deepEqual(repo.addTask("witch hazel toner").buckets.sort(), ["Chemist Warehouse", "Kmart"]);
+    assert.deepEqual(repo.addTask("printer toner cartridge").buckets, ["Officeworks"]);
+  });
+
   it("matches a decisive single word ('laptop')", () => {
     assert.deepEqual(names(matchConcepts(tokenize("laptop"))), ["electronics"]);
   });

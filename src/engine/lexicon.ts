@@ -41,7 +41,7 @@ interface RawConcept {
  * Warehouse — the engine multi-tags whenever several concepts match.
  */
 const PERSONAL_CARE =
-  "condom lube lubricant bandaid bandage plaster gauze panadol paracetamol nurofen ibuprofen aspirin antiseptic dettol savlon tampon liner sanitary deodorant antiperspirant shampoo conditioner bodywash soap toothpaste toothbrush floss mouthwash listerine razor shave shaving gillette schick sunscreen aloe moisturiser moisturizer lotion balm vaseline tissue cotton swab wipe nappy nappies huggies babylove formula colgate sensodyne nivea dove rexona lynx berocca oil vitamin tweezer clipper emery loofah pumice qtip earplug nail powder cream gel aid firstaid kit hair comb hairbrush mask patch pimple acne wart blister inhaler electrolyte creatine epipen repellent face spray heat ear bronzer concealer foundation mascara eyeliner lipstick eyeshadow blush brow lash makeup remover polish perfume cologne aftershave fragrance dye";
+  "condom lube lubricant bandaid bandage plaster gauze panadol paracetamol nurofen ibuprofen aspirin antiseptic dettol savlon tampon liner sanitary deodorant antiperspirant shampoo conditioner bodywash soap toothpaste toothbrush floss mouthwash listerine razor shave shaving gillette schick sunscreen aloe moisturiser moisturizer lotion balm vaseline tissue cotton swab wipe nappy nappies huggies babylove formula colgate sensodyne nivea dove rexona lynx berocca oil vitamin tweezer clipper emery loofah pumice qtip earplug nail powder cream gel aid firstaid kit hair comb hairbrush mask patch pimple acne wart blister inhaler electrolyte creatine epipen repellent face spray heat ear bronzer concealer foundation mascara eyeliner lipstick eyeshadow blush brow lash makeup remover polish perfume cologne aftershave fragrance dye serum cleanser beard";
 
 const RAW: RawConcept[] = [
   {
@@ -83,13 +83,19 @@ const RAW: RawConcept[] = [
     name: "homewares",
     aliases: "homewares kmart target bigw",
     vocabulary:
-      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle lego doll craft wrapping ribbon balloon party hamper mat doormat clock peg chopping board airfryer fryer drink bottle lunchbox thermos esky tennis soccer basketball baseball netball cricket racket racquet yarn knitting sewing thread umbrella sleeping picnic helmet incense album christmas ornament tinsel bauble rolling whisk grater peeler tong strainer spatula ladle knife fork spoon dice domino needle thimble button zipper washcloth plush teddy flyswatter swat sistema pyrex corelle tefal raco tupperware tontine rag cloth",
+      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle jigsaw lego doll craft wrapping ribbon balloon party hamper mat doormat clock peg chopping board airfryer fryer drink bottle lunchbox thermos tennis soccer basketball baseball netball cricket racket racquet yarn knitting sewing thread umbrella picnic helmet incense album christmas ornament tinsel bauble rolling whisk grater peeler tong strainer spatula ladle knife fork spoon dice domino playing needle thimble button zipper washcloth plush teddy flyswatter swat sistema pyrex corelle tefal raco tupperware tontine rag cloth resistance dumbbell dumbbells kettlebell skipping toner astringent micellar exfoliant witch hazel",
   },
   {
     name: "clothing",
     aliases: "clothing clothes apparel fashion wardrobe uniqlo zara myer cottonon",
     vocabulary:
       "shirt tshirt tee top pants jeans chino shorts trackie trackies tracksuit jacket puffer hoodie sweater jumper coat sock jocks undies underwear boxer brief bra dress skirt suit tie belt shoe sneaker runner running boot sandal thong scarf glove beanie hat cap pyjama legging singlet thermal blazer cardigan trouser polo swimsuit swimmer trunks activewear uniform vest denim flannel linen raincoat slipper heel loafer bikini blouse camisole fleece gown robe lingerie nightie nightwear tights sweatshirt slacks poncho shawl pashmina sarong waistcoat overalls dungaree cufflink knickers trainer stocking swim swimming hoody sunglasses sunnies corset kaftan romper nightgown swimwear underpants undershirt underclothes cargo tankini kilt necktie bonds champion adidas nike puma levis levi asics converse vans crocs ugg uggs",
+  },
+  {
+    name: "outdoor",
+    aliases: "outdoor outdoors camping bcf anaconda kathmandu rays",
+    vocabulary:
+      "camping camp tent hammock hiking hike trekking swag tarp campfire lantern headlamp headtorch carabiner kayak canoe paddle sup fishing rod reel tackle lure sinker esky cooler icebox gazebo canopy marquee campstove burner stretcher airbed snorkel wetsuit dive surfboard bodyboard boogieboard thermos flask billy trangia hydration camelbak trowel sleeping bedroll bushwalk campground caravan annexe tacklebox waders paracord bivvy",
   },
   {
     name: "computer",
@@ -107,13 +113,16 @@ const RAW: RawConcept[] = [
     name: "chemist",
     aliases: "chemist pharmacy priceline",
     vocabulary:
-      `prescription medicine pill supplement tablet capsule ointment thermometer pregnancy test protein codral telfast zyrtec claratyne gaviscon mylanta imodium hydralyte voltaren nicorette strepsils difflam vicks sudafed demazin otrivin canesten betadine elastoplast blackmores swisse ostelin cenovis qv cetaphil sukin neutrogena bepanthen sudocrem straightener curler curling hairdryer blowdryer antihistamine hayfever ventolin melatonin magnesium probiotic collagen retinol serum facial cleanser eye drop lens solution contact lozenge throat cough ${PERSONAL_CARE}`,
+      `prescription medicine pill supplement tablet capsule ointment thermometer pregnancy test protein codral telfast zyrtec claratyne gaviscon mylanta imodium hydralyte voltaren nicorette strepsils difflam vicks sudafed demazin otrivin canesten betadine elastoplast blackmores swisse ostelin cenovis qv cetaphil sukin neutrogena bepanthen sudocrem straightener curler curling hairdryer blowdryer antihistamine hayfever ventolin melatonin magnesium probiotic collagen retinol serum facial cleanser eye drop lens solution contact lozenge throat cough toner astringent micellar exfoliant witch hazel ${PERSONAL_CARE}`,
   },
   {
+    // Deliberately clinical only — appointments, practitioners, procedures.
+    // Fitness/exercise gear (yoga mat, resistance bands) belongs to a store
+    // (Kmart), NOT here, so it isn't dragged into Medical.
     name: "health",
-    aliases: "health medical doctor fitness wellness appointments",
+    aliases: "health medical doctor wellness appointment appointments",
     vocabulary:
-      "gym workout exercise run jog yoga pilate stretch cardio weight lift squat deadlift doctor dentist gp optometrist physio physiotherapist chiro chiropractor osteo podiatrist dermatologist cardiologist psychologist psychiatrist counsellor counselling therapist therapy dietitian specialist appointment checkup consult consultation assessment screening scan xray mri ultrasound pathology blood bloods referral vaccination vaccine booster jab flu surgery operation procedure hospital clinic emergency medicare bulkbill prescription diet sleep meditation mindfulness allergy injury recovery rehab dental filling crown rootcanal orthodontist braces skin mole biopsy hearing audiology dietician nutritionist",
+      "doctor dentist gp optometrist physio physiotherapist chiro chiropractor osteo podiatrist dermatologist cardiologist psychologist psychiatrist counsellor counselling therapist therapy dietitian specialist appointment checkup consult consultation assessment screening scan xray mri ultrasound pathology blood bloods referral vaccination vaccine booster jab flu surgery operation procedure hospital clinic emergency medicare bulkbill prescription allergy injury rehab dental filling crown rootcanal orthodontist braces skin mole biopsy hearing audiology dietician nutritionist",
   },
   {
     name: "finance",
@@ -196,6 +205,23 @@ export function conceptForBucketName(name: string): Concept | null {
  *    both, while "watch the onion movie trailer" (1 recognized word of 4)
  *    stays untagged.
  */
+/**
+ * Generic modifiers, pack sizes and materials that describe a product without
+ * saying where to buy it. Excluded from the coverage denominator so a lone but
+ * decisive product noun still tags ("waterproof playing cards" → Kmart).
+ */
+const FILLER = new Set(
+  stemWords(
+    "set pack packet piece pair mini large small medium jumbo travel waterproof " +
+      "portable adjustable premium deluxe assorted non nonslip slip double single " +
+      "multi combo value bulk family size foldable folding reusable lightweight compact",
+  ),
+);
+
+function isFiller(token: string): boolean {
+  return FILLER.has(token) || /^\d/.test(token);
+}
+
 let unionVocab: Set<string> | null = null;
 function fullVocabulary(): Set<string> {
   if (!unionVocab) {
@@ -227,8 +253,13 @@ export function matchConcepts(tokens: string[]): Concept[] {
   // words AND its hit word isn't already explained by a strong concept —
   // so "celery and a drill bit" tags groceries alongside hardware, while
   // the lone "email" in a work-heavy sentence doesn't drag in computer.
+  //
+  // Coverage is measured over CONTENT words only: generic modifiers and sizes
+  // ("1000-piece", "set", "non-slip", "waterproof") are noise, so a real
+  // product noun ("puzzle", "cards") isn't drowned out by its own description.
+  const contentCount = [...unique].filter((t) => !isFiller(t)).length || unique.size;
   const weak =
-    recognized.size * 2 >= unique.size
+    recognized.size * 2 >= contentCount
       ? scored.filter((s) => s.hitWords.length === 1 && !claimed.has(s.hitWords[0]!))
       : [];
 
