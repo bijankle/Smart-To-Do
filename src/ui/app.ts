@@ -69,6 +69,7 @@ const GENERIC_REMAP: Record<string, string> = {
 const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
 const LAST_SYNC_KEY = "smart-to-do/last-sync";
 const OMDB_KEY = "smart-to-do/omdb-key";
+const TMDB_KEY = "smart-to-do/tmdb-key";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -208,10 +209,10 @@ function healPlainMediaTasks(): void {
 
 /** Bump when enrichment logic improves, to force a one-time re-fetch of all
  * linked tasks (e.g. the Spotify exact-artist fix, book synopsis fallback). */
-const ENRICH_VERSION = 3;
+const ENRICH_VERSION = 4;
 
 async function enrichLinkedTask(taskId: string, media: MediaLink): Promise<void> {
-  const result = await fetchLinkInfo(media, fetch, localStorage.getItem(OMDB_KEY));
+  const result = await fetchLinkInfo(media, fetch, localStorage.getItem(OMDB_KEY), localStorage.getItem(TMDB_KEY));
   if (!result || Object.keys(result.info).length === 0) return;
   try {
     repo.attachInfo(taskId, { title: result.title, info: result.info, enrichedV: ENRICH_VERSION });
@@ -802,6 +803,19 @@ function initSyncControls(): void {
     else localStorage.removeItem(OMDB_KEY);
     const status = $("#omdb-status");
     status.textContent = key ? "Saved ✓ — new film links will show ratings" : "Cleared";
+    status.classList.remove("sync-status-error");
+  });
+
+  // Optional TMDb key — the richest film source (synopsis, /10 rating,
+  // runtime, genre, director), resolved straight from the IMDb id.
+  const tmdbInput = $<HTMLInputElement>("#tmdb-key");
+  tmdbInput.value = localStorage.getItem(TMDB_KEY) ?? "";
+  $("#tmdb-save-btn").addEventListener("click", () => {
+    const key = tmdbInput.value.trim();
+    if (key) localStorage.setItem(TMDB_KEY, key);
+    else localStorage.removeItem(TMDB_KEY);
+    const status = $("#tmdb-status");
+    status.textContent = key ? "Saved ✓ — film links will now use TMDb" : "Cleared";
     status.classList.remove("sync-status-error");
   });
 

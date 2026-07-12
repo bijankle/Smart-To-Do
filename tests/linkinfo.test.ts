@@ -91,6 +91,35 @@ describe("Pasted media links", () => {
     assert.ok(result?.info["Synopsis"]?.includes("Oppenheimer"));
   });
 
+  it("uses TMDb (richest) from the IMDb id when a TMDb key is supplied", async () => {
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u.includes("/find/tt15398776")) {
+        // IMDb id → TMDb movie id.
+        return { ok: true, json: async () => ({ movie_results: [{ id: 872585 }] }) } as Response;
+      }
+      if (u.includes("/movie/872585")) {
+        return { ok: true, json: async () => ({
+          title: "Oppenheimer", overview: "The story of J. Robert Oppenheimer and the atomic bomb.",
+          runtime: 181, release_date: "2023-07-21", vote_average: 8.1,
+          genres: [{ name: "Drama" }, { name: "History" }],
+          credits: { crew: [{ job: "Director", name: "Christopher Nolan" }, { job: "Writer", name: "Christopher Nolan" }] },
+        }) } as Response;
+      }
+      throw new Error("unexpected call: " + u);
+    }) as unknown as typeof fetch;
+
+    const link = parseMediaLink("https://www.imdb.com/title/tt15398776/")!;
+    const result = await fetchLinkInfo(link, fakeFetch, null, "tmdbkey");
+    assert.equal(result?.title, "Oppenheimer");
+    assert.equal(result?.info["Director"], "Christopher Nolan");
+    assert.equal(result?.info["Year"], "2023");
+    assert.equal(result?.info["Duration"], "3h 1m");
+    assert.equal(result?.info["Genre"], "Drama, History");
+    assert.equal(result?.info["Rating"], "8.1 / 10");
+    assert.ok(result?.info["Synopsis"]?.includes("Oppenheimer"));
+  });
+
   it("uses OMDb for the IMDb rating /10 when a key is supplied", async () => {
     const fakeFetch = (async (input: string | URL | Request) => {
       assert.ok(String(input).includes("omdbapi.com"));

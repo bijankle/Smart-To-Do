@@ -43,11 +43,27 @@
         <span id="sync-status" class="sync-status"></span>
       </div>
 
-      <div class="settings-title" style="margin-top:22px;">Film ratings (optional)</div>
+      <div class="settings-title" style="margin-top:22px;">Film details (recommended)</div>
       <p class="settings-hint">
-        Film callouts already show synopsis, runtime and genre with no setup. To also
-        show the IMDb star rating out of 10, paste a free OMDb API key
-        (omdbapi.com — takes 30 seconds).
+        Film callouts work with no setup, but a free TMDb key gives the richest
+        info — synopsis, star rating /10, runtime, genre and director — pulled
+        straight from the IMDb link. Create one at
+        themoviedb.org → Settings → API (free, ~2 minutes).
+      </p>
+      <label class="settings-label">
+        <span>TMDb API key</span>
+        <input id="tmdb-key" class="settings-input" type="text" placeholder="e.g. 09a1b2c3d4e5f6…" />
+      </label>
+      <div class="settings-row">
+        <button type="button" id="tmdb-save-btn" class="btn-ghost">Save key</button>
+        <span id="tmdb-status" class="sync-status"></span>
+      </div>
+
+      <div class="settings-title" style="margin-top:22px;">Film ratings — alternative (optional)</div>
+      <p class="settings-hint">
+        Prefer OMDb, or don't have a TMDb key? Paste a free OMDb API key
+        (omdbapi.com — takes 30 seconds) to show the IMDb star rating out of 10.
+        TMDb is used first when both are set.
       </p>
       <label class="settings-label">
         <span>OMDb API key</span>

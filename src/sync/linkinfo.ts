@@ -283,8 +283,69 @@ async function fetchFilmOmdb(link: MediaLink, key: string, fetchFn: typeof fetch
   return { title: m.Title, info };
 }
 
-async function fetchFilmInfo(link: MediaLink, omdbKey: string | null, fetchFn: typeof fetch): Promise<LinkInfo | null> {
-  // With a key, OMDb is richest (incl. IMDb rating /10) for id or title.
+interface TmdbGenre { name?: string }
+interface TmdbCrew { job?: string; name?: string }
+interface TmdbMovie {
+  title?: string;
+  name?: string;
+  overview?: string;
+  runtime?: number;
+  release_date?: string;
+  vote_average?: number;
+  genres?: TmdbGenre[];
+  credits?: { crew?: TmdbCrew[] };
+}
+
+const TMDB = "https://api.themoviedb.org/3";
+
+/**
+ * Richest film source: TMDb (free key, CORS-enabled for GETs). Resolves the
+ * exact movie from the IMDb id via /find, or by title/year, then reads full
+ * detail (synopsis, /10 rating, runtime, genre, director) in one call.
+ */
+async function fetchFilmTmdb(link: MediaLink, key: string, fetchFn: typeof fetch): Promise<LinkInfo | null> {
+  let id: number | null = null;
+  if (link.id) {
+    const res = await fetchFn(`${TMDB}/find/${encodeURIComponent(link.id)}?api_key=${encodeURIComponent(key)}&external_source=imdb_id`);
+    if (!res.ok) return null;
+    id = ((await res.json()) as { movie_results?: Array<{ id?: number }> }).movie_results?.[0]?.id ?? null;
+  } else if (link.slugTitle) {
+    const q = encodeURIComponent(link.slugTitle);
+    const res = await fetchFn(`${TMDB}/search/movie?api_key=${encodeURIComponent(key)}&query=${q}${link.year ? `&year=${link.year}` : ""}`);
+    if (!res.ok) return null;
+    id = ((await res.json()) as { results?: Array<{ id?: number }> }).results?.[0]?.id ?? null;
+  }
+  if (!id) return null;
+
+  const detail = await fetchFn(`${TMDB}/movie/${id}?api_key=${encodeURIComponent(key)}&append_to_response=credits`);
+  if (!detail.ok) return null;
+  const m = (await detail.json()) as TmdbMovie;
+  const title = m.title ?? m.name;
+  if (!title) return null;
+
+  const info: Record<string, string> = {};
+  const synopsis = trimSynopsis(m.overview);
+  if (synopsis) info["Synopsis"] = synopsis;
+  const director = m.credits?.crew?.filter((c) => c.job === "Director").map((c) => c.name).filter(Boolean).slice(0, 2).join(", ");
+  if (director) info["Director"] = director;
+  if (m.release_date) info["Year"] = m.release_date.slice(0, 4);
+  const duration = formatDuration(undefined, m.runtime ? `${m.runtime}` : undefined);
+  if (duration) info["Duration"] = duration;
+  const genre = m.genres?.map((g) => g.name).filter(Boolean).slice(0, 2).join(", ");
+  if (genre) info["Genre"] = genre;
+  if (m.vote_average && m.vote_average > 0) info["Rating"] = `${m.vote_average.toFixed(1)} / 10`;
+  if (Object.keys(info).length === 0) return null;
+  return { title, info };
+}
+
+async function fetchFilmInfo(link: MediaLink, omdbKey: string | null, tmdbKey: string | null, fetchFn: typeof fetch): Promise<LinkInfo | null> {
+  // TMDb is the richest source (synopsis + /10 rating + runtime + genre +
+  // director) and maps cleanly from the IMDb id.
+  if (tmdbKey) {
+    const viaTmdb = await fetchFilmTmdb(link, tmdbKey, fetchFn);
+    if (viaTmdb) return viaTmdb;
+  }
+  // OMDb also carries the IMDb rating /10 for id or title.
   if (omdbKey) {
     const viaOmdb = await fetchFilmOmdb(link, omdbKey, fetchFn);
     if (viaOmdb) return viaOmdb;
@@ -533,6 +594,7 @@ export async function fetchLinkInfo(
   link: MediaLink,
   fetchFn: typeof fetch = fetch,
   omdbKey: string | null = null,
+  tmdbKey: string | null = null,
 ): Promise<LinkInfo | null> {
   try {
     switch (link.kind) {
@@ -541,7 +603,7 @@ export async function fetchLinkInfo(
         return await fetchBookInfo(link, fetchFn);
       case "imdb":
       case "imdb-share":
-        return await fetchFilmInfo(link, omdbKey, fetchFn);
+        return await fetchFilmInfo(link, omdbKey, tmdbKey, fetchFn);
       case "spotify":
       case "spotify-share":
         return await fetchMusicInfo(link, fetchFn);
