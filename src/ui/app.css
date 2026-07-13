@@ -569,43 +569,18 @@ body {
 }
 
 /* Clear-all bar: right-aligned so the button sits over the row × column. */
+/* Icon action bar: same 12px gap and 10px right padding as a row, so the
+   Copy-all/Clear-all icons line up directly above the row ⧉ and × columns. */
 .list-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 2px 10px 6px;
+  gap: 12px;
+  padding: 2px 10px 8px;
 }
 
-.list-action {
-  height: var(--control-height-small);
-  padding: 0 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  background: var(--bg);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.list-action:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.copy-list:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.clear-all {
-  color: var(--danger);
-}
-
-.clear-all:hover {
-  background: var(--danger-tint);
-  border-color: var(--danger-border);
+/* Row buttons hide until hover; these are persistent actions, so keep visible. */
+.list-icon {
+  opacity: 1;
 }
 
 .footer {

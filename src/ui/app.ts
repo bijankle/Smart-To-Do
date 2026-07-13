@@ -68,7 +68,7 @@ const LOOKUP_CACHE_KEY = "smart-to-do/lookup-cache";
 const LOOKUP_MIN_INTERVAL_MS = 6500;
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v18 · trail runs + copy";
+const APP_VERSION = "v19 · icon actions";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -629,38 +629,30 @@ function renderList(): void {
         : `No tasks tagged “${filter}” yet.`;
     list.append(empty);
   } else {
-    // Action bar, right-aligned above the top item (over the × column).
+    // Action bar: icon buttons identical to the row's, aligned right so
+    // Copy-all sits over the ⧉ column and Clear-all over the × column.
     if (open.length > 0) {
       const bar = document.createElement("div");
       bar.className = "list-actions";
 
-      const copy = document.createElement("button");
-      copy.type = "button";
-      copy.className = "list-action copy-list";
-      copy.textContent = "Copy";
-      copy.title = "Copy this list as a table (item + categories)";
-      copy.addEventListener("click", () => {
+      // Copy-all (⧉) — copies the whole list as an item + categories table.
+      const copy = iconButton("row-copy list-icon", "⧉", "Copy the whole list", () => {
         void navigator.clipboard.writeText(buildListTable(open)).then(
-          () => flashButton(copy, "Copied ✓"),
-          () => flashButton(copy, "Copy failed"),
+          () => flashButton(copy, "✓"),
+          () => flashButton(copy, "✕"),
         );
       });
-      bar.append(copy);
 
-      const clear = document.createElement("button");
-      clear.type = "button";
-      clear.className = "list-action clear-all";
-      clear.textContent = "Clear all";
-      clear.title =
-        filter === "all" ? "Delete every task" : `Clear all items from ${filter}`;
-      clear.addEventListener("click", () => {
+      // Clear-all (×) — same glyph as the per-row delete, applied to the view.
+      const clear = iconButton("row-delete list-icon", "×", "Clear the whole list", () => {
         const what = filter === "all" ? "all tasks" : `all items in “${filter}”`;
         if (!window.confirm(`Clear ${what}?`)) return;
         snapshot();
         repo.clearFilter(filter);
         render();
       });
-      bar.append(clear);
+
+      bar.append(copy, clear);
       list.append(bar);
     }
     for (const task of open) {
