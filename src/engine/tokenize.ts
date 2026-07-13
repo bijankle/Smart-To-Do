@@ -84,7 +84,7 @@ const NO_FUZZY = new Set([
   "front", "going", "gone", "good", "great", "high", "house", "idea", "issue",
   "kid", "last", "later", "leave", "left", "little", "long", "look", "low",
   "mate", "maybe", "meeting", "month", "morning", "movie", "musing", "near",
-  "next", "nice", "night", "nothing", "other", "over", "people", "person",
+  "next", "nice", "night", "nothing", "other", "over", "people", "person", "power", "basic",
   "place", "problem", "question", "random", "ready", "really", "right",
   "room", "school", "season", "send", "series", "short", "show", "side",
   "small", "someone", "something", "start", "story", "stuff", "sure", "tell",

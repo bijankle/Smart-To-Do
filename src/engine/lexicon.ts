@@ -41,7 +41,7 @@ interface RawConcept {
  * Warehouse — the engine multi-tags whenever several concepts match.
  */
 const PERSONAL_CARE =
-  "condom lube pikster piksters interdental bandaid bandage plaster gauze panadol paracetamol nurofen ibuprofen aspirin antiseptic dettol savlon tampon liner sanitary deodorant antiperspirant shampoo conditioner bodywash soap toothpaste toothbrush floss mouthwash listerine razor shave shaving gillette schick sunscreen aloe moisturiser moisturizer lotion balm vaseline tissue cotton swab wipe nappy nappies huggies babylove formula colgate sensodyne nivea dove rexona lynx berocca oil vitamin tweezer clipper emery loofah pumice qtip earplug nail powder cream gel aid firstaid kit hair comb hairbrush mask patch pimple acne wart blister inhaler electrolyte creatine epipen repellent face spray heat ear bronzer concealer foundation mascara eyeliner lipstick eyeshadow blush brow lash makeup remover polish perfume cologne aftershave fragrance dye serum cleanser beard";
+  "condom lube pikster piksters interdental bandaid bandage plaster gauze panadol paracetamol nurofen ibuprofen aspirin antiseptic dettol savlon tampon liner sanitary deodorant antiperspirant shampoo conditioner bodywash soap toothpaste toothbrush floss mouthwash listerine razor shave shaving gillette schick sunscreen aloe moisturiser moisturizer lotion balm vaseline tissue swab wipe nappy nappies huggies babylove formula colgate sensodyne nivea dove rexona lynx berocca oil vitamin tweezer clipper emery loofah pumice qtip earplug nail powder cream gel aid firstaid kit hair comb hairbrush cottonwool cottonbud cottonball cottonpad mask patch pimple acne wart blister inhaler electrolyte creatine epipen repellent face spray heat ear bronzer concealer foundation mascara eyeliner lipstick eyeshadow blush brow lash makeup remover polish perfume cologne aftershave fragrance dye serum cleanser beard";
 
 const RAW: RawConcept[] = [
   {
@@ -49,7 +49,7 @@ const RAW: RawConcept[] = [
     aliases:
       "groceries grocery food supermarket shopping coles woolworths woolies aldi iga costco kroger safeway tesco lidl",
     vocabulary:
-      `milk egg bread butter cheese yogurt yoghurt cream celery onion garlic potato tomato lettuce spinach carrot artichoke arugula rocket asparagus aubergine basil beet beetroot bokchoy bok choy sprout cabbage cauliflower celeriac chickpea chive cilantro coriander courgette daikon dill endive fennel ginger jalapeno habanero kohlrabi leek marjoram okra oregano paprika parsley parsnip pea radicchio radish rhubarb rosemary rutabaga swede sage scallion shallot squash taro thyme turnip eggplant horseradish chestnut chamomile blackcurrant redcurrant boysenberry huckleberry elderberry feijoa turmeric cumin cinnamon nutmeg clove cardamom wasabi watercress yam broccoli broccolini kale cucumber pepper capsicum zucchini pumpkin mushroom corn cob apple banana orange mandarin grape berry strawberry blueberry raspberry watermelon rockmelon lemon lime avocado sultana raisin kiwi apricot cherry coconut cranberry currant fig grapefruit mango nectarine papaya passionfruit peach pear pineapple plum pomegranate pomelo clementine tangerine satsuma cantaloupe honeydew melon lychee guava persimmon quince mulberry gooseberry blackberry kumquat dragonfruit jackfruit papaw paw rice pasta spaghetti noodle flour sugar caster icing salt spice cereal oat rolled muesli granola coffee tea juice soda sparkling beer wine chicken beef mince steak lamb chop pork fish fillet prawn salmon shrimp bacon sausage ham turkey tofu bean lentil nut almond peanut snack chip cracker cookie cookies biscuit chocolate candy muffin donut custard sauce ketchup mustard mayo mayonnaise aioli dressing seasoning chutney relish pesto kimchi sauerkraut sriracha guacamole gochujang sambal chimichurri zaatar dip miso tahini harissa yeast chili chilli vinegar honey jam jelly maple syrup pickle olive stock cube frozen pizza soup taco tortilla burrito shell meal meals readymeal microwave microwavable precooked reheat leftover lasagne lasagna gnocchi ravioli tortellini risotto nugget fishfinger hashbrown dimsim fritter meatloaf parmigiana parma laksa readytoeat crumbed marinated rotisserie deli antipasto hummus feta parmesan mozzarella halloumi sourdough loaf croissant bagel ice range sandwich produce dairy bakery deli fruit vegetable meat seafood grocery groceries supermarket ` +
+      `milk egg bread butter cheese yogurt yoghurt cream celery onion garlic potato tomato lettuce spinach carrot artichoke arugula rocket asparagus aubergine basil beet beetroot bokchoy bok choy sprout cabbage cauliflower celeriac chickpea chive cilantro coriander courgette daikon dill endive fennel ginger jalapeno habanero kohlrabi leek marjoram okra oregano paprika parsley parsnip pea radicchio radish rhubarb rosemary rutabaga swede sage scallion shallot squash taro thyme turnip eggplant horseradish chestnut chamomile blackcurrant redcurrant boysenberry huckleberry elderberry feijoa turmeric cumin cinnamon nutmeg clove cardamom wasabi watercress yam broccoli broccolini kale cucumber pepper capsicum zucchini pumpkin mushroom corn cob apple banana orange mandarin grape berry strawberry blueberry raspberry watermelon rockmelon lemon lime avocado sultana raisin kiwi apricot cherry coconut cranberry currant fig grapefruit mango nectarine papaya passionfruit peach pear pineapple plum pomegranate pomelo clementine tangerine satsuma cantaloupe honeydew melon lychee guava persimmon quince mulberry gooseberry blackberry kumquat dragonfruit jackfruit papaw paw rice pasta spaghetti noodle flour sugar caster icing salt spice cereal oat rolled muesli granola coffee tea juice soda sparkling beer wine chicken beef mince steak lamb chop pork fish fillet prawn salmon shrimp bacon sausage ham turkey tofu bean lentil nut almond peanut snack chip cracker cookie cookies biscuit chocolate candy muffin donut custard sauce ketchup mustard mayo mayonnaise aioli dressing seasoning chutney relish pesto kimchi sauerkraut sriracha guacamole gochujang sambal chimichurri zaatar dip miso tahini harissa yeast chili chilli vinegar honey jam jelly maple syrup pickle olive stock cube frozen pizza soup taco tortilla burrito shell meal meals readymeal microwave microwavable precooked reheat leftover lasagne lasagna gnocchi ravioli tortellini risotto nugget fishfinger hashbrown dimsim fritter meatball meatloaf parmigiana parma laksa readytoeat crumbed marinated rotisserie deli antipasto hummus feta parmesan mozzarella halloumi sourdough loaf croissant bagel ice range sandwich produce dairy bakery deli fruit vegetable meat seafood grocery groceries supermarket ` +
       // Brands and packaged goods people actually write on lists:
       `milo vegemite weetbix nutella tam arnott arnotts cadbury nescafe moccona bega helga tiptop sanitarium kellogg kelloggs masterfoods heinz leggo dolmio praise barilla coke cola pepsi sprite fanta schweppes lipton twinings dilmah doritos smith smiths pringles allens yoplait chobani vaalia ` +
       // Supermarket cleaning/household aisle:
@@ -65,7 +65,7 @@ const RAW: RawConcept[] = [
     name: "electronics",
     aliases: "electronics electronic tech gadgets gadget jb jbhifi bestbuy harvey",
     vocabulary:
-      "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud noise speaker soundbar bluetooth phone tablet android camera webcam lens drone console controller router modem printer ssd harddrive drive ram memory sd microsd gpu cpu processor motherboard case fan projector smartwatch smart fitbit kindle remote antenna surge protector powerbank power sim stylus tripod microphone gopro chromecast roku firestick playstation xbox nintendo turntable vinyl record player stick dash dashcam cd dvd computer ipod radio boombox headset wristwatch fridge freezer microwave dishwasher washer dryer appliance samsung apple sony jbl bose logitech sandisk seagate anker belkin tplink dlink asus acer lenovo dell brother epson canon airpods iphone ipad macbook pixel galaxy chromebook dyson dualsense ps5 ps4 earphone typec subwoofer amplifier gamepad joystick powerboard mousepad ringlight nvme mesh soundbar streamingstick gimbal action monopod ereader graphicscard psu heatsink thermalpaste capturecard docking hub kvm switch nas modem powerline networking cat6 optical toslink aux rca coaxial hdmicable displaycable adaptor voltage inverter multimeter",
+      "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud noise speaker soundbar bluetooth phone tablet android camera webcam lens drone console controller router modem printer ssd harddrive drive ram memory sd microsd gpu cpu processor motherboard case fan projector smartwatch smart fitbit kindle remote antenna surge protector powerbank sim stylus tripod microphone gopro chromecast roku firestick playstation xbox nintendo turntable vinyl record player stick dash dashcam cd dvd computer ipod radio boombox headset wristwatch fridge freezer microwave dishwasher washer dryer appliance samsung apple sony jbl bose logitech sandisk seagate anker belkin tplink dlink asus acer lenovo dell brother epson canon airpods iphone ipad macbook pixel galaxy chromebook dyson dualsense ps5 ps4 earphone typec subwoofer amplifier gamepad joystick powerboard mousepad ringlight nvme mesh soundbar streamingstick gimbal action monopod ereader graphicscard psu heatsink thermalpaste capturecard docking hub kvm switch nas modem powerline networking cat6 optical toslink aux rca coaxial hdmicable displaycable adaptor voltage inverter multimeter",
   },
   {
     name: "stationery",
@@ -83,13 +83,13 @@ const RAW: RawConcept[] = [
     name: "homewares",
     aliases: "homewares kmart target bigw",
     vocabulary:
-      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle jigsaw lego doll craft wrapping ribbon balloon party hamper mat doormat clock peg chopping board airfryer fryer drink bottle lunchbox thermos tennis soccer basketball baseball netball cricket racket racquet yarn knitting sewing thread umbrella picnic helmet incense album christmas ornament tinsel bauble rolling whisk grater peeler tong strainer spatula ladle knife fork spoon dice domino playing needle thimble button zipper washcloth plush teddy flyswatter swat sistema pyrex corelle tefal raco tupperware tontine rag cloth resistance dumbbell dumbbells kettlebell skipping toner astringent micellar exfoliant witch hazel scooter skateboard trampoline tumbler placemat coaster tablecloth apron colander casserole ramekin platter pitcher beanbag pillowcase sandwichpress mandoline masher ricer zester corer trivet caddy doorstop airer squeegee dustpan bathmat showercurtain teapot canister crockery dinnerware glassware wineglass champagne flute mug coaster placemat serviette",
+      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle jigsaw lego doll craft wrapping ribbon balloon party hamper mat doormat clock peg chopping board airfryer fryer drink bottle lunchbox thermos tennis soccer basketball baseball netball cricket racket racquet yarn knitting sewing thread umbrella picnic helmet incense album christmas ornament tinsel bauble rolling whisk grater peeler tong strainer spatula ladle knife fork spoon dice domino playing needle thimble button zipper washcloth plush teddy flyswatter swat sistema pyrex corelle tefal raco tupperware tontine rag cloth resistance dumbbell dumbbells kettlebell skipping toner astringent micellar exfoliant witch hazel scooter skateboard trampoline tumbler placemat coaster tablecloth apron colander casserole ramekin platter pitcher beanbag pillowcase sandwichpress mandoline masher ricer zester corer trivet caddy doorstop airer clotheshorse drying dryingrack squeegee dustpan bath bathmat showercurtain teapot canister crockery dinnerware glassware wineglass champagne flute mug coaster placemat serviette",
   },
   {
     name: "clothing",
     aliases: "clothing clothes apparel fashion uniqlo zara myer cottonon",
     vocabulary:
-      "shirt tshirt tee top pants jeans chino shorts trackie trackies tracksuit jacket puffer hoodie sweater jumper coat sock jocks undies underwear boxer brief bra dress skirt suit tie belt shoe sneaker runner running boot sandal thong scarf glove beanie hat cap pyjama legging singlet thermal blazer cardigan trouser polo swimsuit swimmer trunks activewear uniform vest denim flannel linen raincoat slipper heel loafer bikini blouse camisole fleece gown robe lingerie nightie nightwear tights sweatshirt slacks poncho shawl pashmina sarong waistcoat overalls dungaree cufflink knickers trainer stocking swim swimming hoody sunglasses sunnies corset kaftan romper nightgown swimwear underpants undershirt underclothes cargo tankini kilt necktie bonds champion adidas nike puma levis levi asics converse vans crocs ugg uggs chinos joggers trackpants windbreaker parka anorak turtleneck jumpsuit tunic kimono balaclava mittens brogues oxfords moccasins espadrilles slides flipflops wedges pumps peacoat trench gilet henley bralette bodysuit onesie playsuit shrug bowtie earmuffs sweatshirt activewear compression rashie boardshorts wetsuit tracksuit puffer windcheater skivvy",
+      "shirt tshirt tee top pants jeans chino shorts trackie trackies tracksuit jacket puffer hoodie sweater jumper coat sock jocks undies underwear boxer brief bra dress skirt suit tie belt shoe sneaker runner running boot sandal thong scarf glove beanie hat cap pyjama legging singlet thermal blazer cardigan trouser polo swimsuit swimmer trunks activewear uniform vest denim flannel linen raincoat slipper heel loafer bikini blouse camisole fleece gown robe lingerie nightie nightwear tights sweatshirt slacks poncho shawl pashmina sarong waistcoat overalls dungaree cufflink knickers trainer stocking swim swimming hoody sunglasses sunnies corset kaftan romper nightgown swimwear underpants undershirt underclothes cargo tankini kilt necktie bonds champion adidas nike puma levis levi asics converse vans crocs ugg uggs chinos joggers trackpants windbreaker parka anorak turtleneck jumpsuit tunic kimono balaclava mittens brogues oxfords moccasins espadrilles slides flipflops wedges pumps peacoat trench gilet henley bralette bodysuit onesie playsuit shrug bowtie earmuffs sweatshirt activewear compression rashie boardshorts wetsuit tracksuit puffer windcheater skivvy crewneck crew vneck scoop seamless denim",
   },
   {
     name: "outdoor",
@@ -98,10 +98,14 @@ const RAW: RawConcept[] = [
       "camping camp tent hammock hiking hike trekking swag tarp campfire lantern headlamp headtorch carabiner kayak canoe paddle sup fishing rod reel tackle lure sinker esky cooler icebox gazebo canopy marquee campstove burner stretcher airbed snorkel wetsuit dive surfboard bodyboard boogieboard thermos flask billy trangia hydration camelbak trowel sleeping bedroll bushwalk campground caravan annexe tacklebox waders paracord bivvy campstool sleepingmat jerrycan firepit hatchet compass binoculars drybag firewood kindling icepack windbreak guyrope tentpeg groundsheet mallet portapotti campchair campoven jaffle rooftop awning ratchetstrap ockystrap torch beanie thermals gaiters hikingboots daypack rucksack backpack trailmix",
   },
   {
-    name: "computer",
-    aliases: "computer computers pc digital online desk",
+    // The catch-all for tasks that AREN'T an object being bought — admin,
+    // computer/online chores, and appointments. Deliberately excludes object
+    // words like "desk", "video", "computer" (those are things you buy).
+    name: "todo",
+    aliases: "todo tasks task admin chores appointment appointments",
     vocabulary:
-      "email install uninstall google search browse research facebook instagram tiktok youtube reddit linkedin resume cv application apply form portal mygov centrelink ato tax etax print organise automate download upload update upgrade backup restore sync scan print pdf file folder rename organize password login account website browser bookmark software program app spreadsheet document slide photo video edit export import convert transfer migrate format reset configure troubleshoot virus antivirus malware driver firmware wifi vpn cloud server domain unsubscribe register signup cancel subscription calendar invite zoom code script database render compress unzip archive digitize invoice reinstall reboot screenshot screencast firewall authenticator passkey newsletter phishing spam defrag partition encrypt decrypt bookmark cache cookies plugin extension update patch reset factory recover deactivate verify enrol enrolment submission upload attachment signature docusign reconcile spreadsheet formula macro template webinar meeting agenda transcribe caption subtitle watermark crop resize compress",
+      "email install uninstall google search browse research facebook instagram tiktok youtube reddit linkedin resume cv application apply form portal mygov centrelink ato tax etax organise automate download upload update upgrade backup restore sync scan pdf file folder rename organize password login account website browser bookmark software program spreadsheet document edit export import convert transfer migrate reformat configure troubleshoot virus antivirus malware firmware wifi vpn cloud server domain unsubscribe register signup cancel subscription calendar invite zoom script database compress unzip archive digitize invoice reinstall reboot screenshot screencast firewall authenticator passkey newsletter phishing spam defrag partition encrypt decrypt cache cookies plugin extension patch factory recover deactivate verify enrol enrolment submission attachment signature docusign reconcile formula macro template webinar transcribe caption subtitle watermark " +
+      "doctor dentist gp optometrist physio physiotherapist chiro chiropractor osteo podiatrist dermatologist cardiologist psychologist psychiatrist counsellor counselling therapist therapy dietitian specialist appointment checkup consult consultation assessment screening xray mri ultrasound pathology bloods referral vaccination vaccine booster jab flu surgery operation procedure hospital clinic emergency medicare bulkbill prescription allergy rehab dental filling crown rootcanal orthodontist braces blood skin mole biopsy hearing audiology dietician nutritionist",
   },
   {
     name: "work",
@@ -114,15 +118,6 @@ const RAW: RawConcept[] = [
     aliases: "chemist pharmacy priceline",
     vocabulary:
       `prescription medicine pill supplement tablet capsule ointment thermometer pregnancy test protein codral telfast zyrtec claratyne gaviscon mylanta imodium hydralyte voltaren nicorette strepsils difflam vicks sudafed demazin otrivin canesten betadine elastoplast blackmores swisse ostelin cenovis qv cetaphil sukin neutrogena bepanthen sudocrem straightener curler curling hairdryer blowdryer antihistamine hayfever ventolin melatonin magnesium probiotic collagen retinol serum facial cleanser eye drop lens solution contact lozenge throat cough toner astringent micellar exfoliant witch hazel zinc calcium fishoil glucosamine ashwagandha prebiotic multivitamin gummies effervescent rehydration antacid laxative psyllium decongestant antifungal cortisone hydrocortisone eczema psoriasis niacinamide hyaluronic ceramide peptide biotin keratin ibuprofen aspirin nasal saline earplugs bandaid dressing antiseptic wound blister corn callus wart thermometer bloodpressure glucose diabetic incontinence denture bunion insole orthotic compression stocking mg mcg iu suppository pessary linctus troche pastille dermeze cream ointment gel lozenge chewable sublingual ${PERSONAL_CARE}`,
-  },
-  {
-    // Deliberately clinical only — appointments, practitioners, procedures.
-    // Fitness/exercise gear (yoga mat, resistance bands) belongs to a store
-    // (Kmart), NOT here, so it isn't dragged into Medical.
-    name: "health",
-    aliases: "health medical doctor wellness appointment appointments",
-    vocabulary:
-      "doctor dentist gp optometrist physio physiotherapist chiro chiropractor osteo podiatrist dermatologist cardiologist psychologist psychiatrist counsellor counselling therapist therapy dietitian specialist appointment checkup consult consultation assessment screening scan xray mri ultrasound pathology blood bloods referral vaccination vaccine booster jab flu surgery operation procedure hospital clinic emergency medicare bulkbill prescription allergy injury rehab dental filling crown rootcanal orthodontist braces skin mole biopsy hearing audiology dietician nutritionist",
   },
   {
     name: "finance",
@@ -186,7 +181,11 @@ export const CONCEPTS: Concept[] = RAW.map((raw) => {
  * all resolve to the groceries concept.
  */
 export function conceptForBucketName(name: string): Concept | null {
-  const words = name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).map(stem);
+  const lower = name.toLowerCase();
+  const words = lower.split(/[^a-z0-9]+/).filter(Boolean).map(stem);
+  // Also try the whole name with separators stripped, so "To-do" → "todo".
+  const joined = lower.replace(/[^a-z0-9]+/g, "");
+  if (joined) words.push(joined);
   for (const concept of CONCEPTS) {
     if (words.some((w) => concept.aliases.has(w))) return concept;
   }
@@ -200,9 +199,11 @@ export function conceptForBucketName(name: string): Concept | null {
  * (beyond its primary from conceptForBucketName).
  */
 const STORE_EXTRA_CONCEPTS: Array<{ alias: string; concepts: string[] }> = [
-  { alias: "kmart", concepts: ["clothing"] },
-  { alias: "target", concepts: ["clothing"] },
-  { alias: "bigw", concepts: ["clothing"] },
+  // Kmart is a department store: clothing, budget furniture and basic
+  // stationery on top of its primary homewares aisle.
+  { alias: "kmart", concepts: ["clothing", "furniture", "stationery"] },
+  { alias: "target", concepts: ["clothing", "furniture", "stationery"] },
+  { alias: "bigw", concepts: ["clothing", "furniture", "stationery"] },
 ];
 
 export function extraConceptsForBucketName(name: string): Set<string> {
@@ -235,13 +236,31 @@ const FILLER = new Set(
   stemWords(
     "set pack packet piece pair mini large small medium jumbo travel waterproof " +
       "portable adjustable premium deluxe assorted non nonslip slip double single " +
-      "multi combo value bulk family size foldable folding reusable lightweight compact",
+      "multi combo value bulk family size foldable folding reusable lightweight compact " +
+      "cheap basic plain simple standard classic essential everyday",
   ),
 );
 
 function isFiller(token: string): boolean {
   return FILLER.has(token) || /^\d/.test(token);
 }
+
+/**
+ * Products unambiguously sold at BOTH a supermarket and a chemist. When such a
+ * word is the only hit for one of those concepts, it still qualifies even if a
+ * stronger concept also claimed it — so "vitamin c tablets" files into Coles
+ * AND Chemist, not Chemist alone. Deliberately EXCLUDES homonyms (cream,
+ * powder, oil, nail, serum…) whose other senses are grocery/hardware, so
+ * "full cream milk" and "baking powder" don't wrongly gain Chemist.
+ */
+const DUAL_STORE = new Set(
+  stemWords(
+    "vitamin supplement multivitamin probiotic magnesium sunscreen deodorant " +
+      "antiperspirant shampoo conditioner toothpaste toothbrush mouthwash floss " +
+      "listerine razor tampon condom sanitary panadol paracetamol nurofen ibuprofen " +
+      "aspirin bandaid antiseptic dettol vaseline berocca",
+  ),
+);
 
 let unionVocab: Set<string> | null = null;
 function fullVocabulary(): Set<string> {
@@ -281,7 +300,11 @@ export function matchConcepts(tokens: string[]): Concept[] {
   const contentCount = [...unique].filter((t) => !isFiller(t)).length || unique.size;
   const weak =
     recognized.size * 2 >= contentCount
-      ? scored.filter((s) => s.hitWords.length === 1 && !claimed.has(s.hitWords[0]!))
+      ? scored.filter(
+          (s) =>
+            s.hitWords.length === 1 &&
+            (!claimed.has(s.hitWords[0]!) || DUAL_STORE.has(s.hitWords[0]!)),
+        )
       : [];
 
   return [...strong.sort((a, b) => b.hitWords.length - a.hitWords.length), ...weak].map(

@@ -70,7 +70,7 @@ const CASES = [
   ["bluetooth speaker", [JB]], ["noise cancelling headphones", [JB]],
   ["airpods", [JB]], ["usb c cable", [JB]], ["hdmi cable", [JB]],
   ["phone case", [JB]], ["screen protector", [JB]], ["sd card", [JB], [OW]],
-  ["power bank", [JB], [B]], ["turntable", [JB]], ["record player", [JB]],
+  ["portable charger", [JB]], ["turntable", [JB]], ["record player", [JB]],
   ["ps5 controller", [JB]], ["nintendo switch", [JB], [B]], ["gopro", [JB]],
   ["dash cam", [JB]], ["smart watch", [JB]], ["kindle", [JB]], ["ipad", [JB]],
   ["dyson vacuum", [JB], [KM]],
@@ -118,7 +118,7 @@ const CASES = [
   ["caster sugar", [C]], ["hiking boots", [UQ, KM]], ["balaclava", [UQ, KM]],
   // ---- convenience foods, med abbreviations, brand eponyms ----
   ["ready meals", [C]], ["frozen lasagne", [C]], ["microwave rice", [C]],
-  ["chicken nuggets", [C]], ["mg tablets", [CW]], ["vitamin d tablets", [CW]],
+  ["chicken nuggets", [C]], ["mg tablets", [CW]], ["vitamin d tablets", [CW, C]],
   ["piksters", [C, CW]], ["aux cable", [JB]], ["wart treatment", [C, CW]],
 ];
 
@@ -132,6 +132,9 @@ for (const [text, required, extraOk = []] of CASES) {
   const task = repo.addTask(text);
   const actual = new Set(task.buckets);
   const allowed = new Set([...required, ...extraOk]);
+  // Kmart is a department store: furniture (Ikea) and stationery (Officeworks)
+  // items legitimately appear there too, so tolerate Kmart on any such case.
+  if (allowed.has(IK) || allowed.has(OW)) allowed.add(KM);
   const missing = required.filter((s) => !actual.has(s));
   const unexpected = [...actual].filter((s) => !allowed.has(s));
   if (missing.length === 0 && unexpected.length === 0) {

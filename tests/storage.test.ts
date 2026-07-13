@@ -219,7 +219,9 @@ describe("Repository — bespoke store setup", () => {
 
     const repo = await Repository.open(persistence, makeOptions(9_000_000));
     assert.equal(repo.applyStoreSetup([...STORES, "Medical", "Chemist Warehouse"], REMAP), true);
-    assert.deepEqual(repo.getTask("stale")!.buckets, ["Medical"]);
+    // 'Medical appointment' re-tags into To-do (Medical folded away in v7).
+    assert.deepEqual(repo.getTask("stale")!.buckets, ["To-do"]);
+    assert.ok(!repo.listBuckets().includes("Medical"));
     // The media pills are gone and the media-only task with it.
     assert.equal(repo.getTask("film"), null);
     assert.ok(!repo.listBuckets().includes("Films"));
@@ -241,25 +243,28 @@ describe("Repository — bespoke store setup", () => {
     assert.ok(!reopened.listBuckets().includes("Uniqlo"));
   });
 
-  it("renames the Computer pill to 'Computer tasks', keeping its tasks", async () => {
+  it("merges Medical and Computer tasks into a single To-do pill", async () => {
     const persistence = new MemoryPersistence();
-    // Simulate an existing install (setup v4) that still has the old "Computer" pill.
+    // Simulate an existing install (setup v6) with the old life-category pills.
     const before = await Repository.open(persistence, makeOptions());
-    before.createBucket("Computer");
-    const t = before.addTask("do my tax return on mygov", "Computer");
-    assert.deepEqual(before.getTask(t.id)!.buckets, ["Computer"]);
+    before.createBucket("Medical");
+    before.createBucket("Computer tasks");
+    const appt = before.addTask("book a dentist appointment", "Medical");
+    const admin = before.addTask("do my tax return on mygov", "Computer tasks");
     await before.flush();
     const doc = JSON.parse((await persistence.load())!);
-    doc.setupVersion = 4;
+    doc.setupVersion = 6;
     await persistence.save(JSON.stringify(doc));
 
     const repo = await Repository.open(persistence, makeOptions(5_000_000));
-    assert.equal(repo.applyStoreSetup([...STORES, "Computer tasks"], REMAP), true);
-    assert.ok(!repo.listBuckets().includes("Computer"));
-    assert.ok(repo.listBuckets().includes("Computer tasks"));
-    assert.deepEqual(repo.getTask(t.id)!.buckets, ["Computer tasks"]);
-    // The moved training still classifies into the renamed bucket.
-    assert.deepEqual(repo.addTask("backup photos and update drivers").buckets, ["Computer tasks"]);
+    assert.equal(repo.applyStoreSetup([...STORES, "To-do"], REMAP), true);
+    assert.ok(!repo.listBuckets().includes("Medical"));
+    assert.ok(!repo.listBuckets().includes("Computer tasks"));
+    assert.ok(repo.listBuckets().includes("To-do"));
+    // Both tasks and their training carry across to To-do.
+    assert.deepEqual(repo.getTask(appt.id)!.buckets, ["To-do"]);
+    assert.deepEqual(repo.getTask(admin.id)!.buckets, ["To-do"]);
+    assert.deepEqual(repo.addTask("cancel my subscription online").buckets, ["To-do"]);
   });
 
   it("clear all removes a bucket's items but keeps ones shared with another store", async () => {
@@ -306,8 +311,9 @@ describe("Repository — bespoke store setup", () => {
     assert.deepEqual(repo.addTask("drill bits").buckets, ["Bunnings"]);
     assert.deepEqual(repo.addTask("prescription refill").buckets, ["Chemist Warehouse"]);
     assert.deepEqual(repo.addTask("hdmi cable").buckets, ["JB Hi-Fi"]);
-    assert.deepEqual(repo.addTask("stapler and paper").buckets, ["Officeworks"]);
-    assert.deepEqual(repo.addTask("bookshelf and cushions").buckets, ["Ikea"]);
+    // Kmart, a department store, also stocks stationery and furniture.
+    assert.deepEqual(repo.addTask("stapler and paper").buckets.sort(), ["Kmart", "Officeworks"]);
+    assert.deepEqual(repo.addTask("bookshelf and cushions").buckets.sort(), ["Ikea", "Kmart"]);
     assert.deepEqual(repo.addTask("storage tubs and hangers").buckets, ["Kmart"]);
     // General apparel files into both Uniqlo and Kmart (a department store).
     assert.deepEqual(repo.addTask("socks and jeans").buckets.sort(), ["Kmart", "Uniqlo"]);

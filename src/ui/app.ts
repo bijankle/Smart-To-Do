@@ -47,9 +47,8 @@ const MY_PILLS = [
   "Kmart",
   "Uniqlo",
   "Outdoor",
-  // Life categories
-  "Medical",
-  "Computer tasks",
+  // Non-shopping tasks (admin, computer/online chores, appointments)
+  "To-do",
 ];
 const GENERIC_REMAP: Record<string, string> = {
   groceries: "Coles",
@@ -69,7 +68,7 @@ const LOOKUP_CACHE_KEY = "smart-to-do/lookup-cache";
 const LOOKUP_MIN_INTERVAL_MS = 6500;
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v15 · clothing at kmart";
+const APP_VERSION = "v16 · to-do + fixes";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 

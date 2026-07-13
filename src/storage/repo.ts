@@ -97,7 +97,7 @@ export class Repository {
    */
   applyStoreSetup(stores: string[], remap: Record<string, string>): boolean {
     const version = this.doc.setupVersion ?? 0;
-    if (version >= 6) return false;
+    if (version >= 7) return false;
 
     if (version < 2) this.applyPillSetup(stores, remap);
     // v4: the media feature (songs/films/books) was removed — drop those pills
@@ -110,9 +110,16 @@ export class Repository {
     // v6: new pills added (e.g. Outdoor) — create any the user has never had,
     // without resurrecting ones they deliberately deleted.
     if (version < 6) this.ensureNewPills(stores);
+    // v7: "Medical" and "Computer tasks" merged into one "To-do" pill for
+    // anything that isn't an object being bought. foldBucket creates To-do when
+    // either source exists; a fresh install gets it from applyPillSetup instead.
+    if (version < 7) {
+      this.foldBucket("Medical", "To-do");
+      this.foldBucket("Computer tasks", "To-do");
+    }
     this.rebuildClassifier();
     this.retagAuto();
-    this.doc.setupVersion = 6;
+    this.doc.setupVersion = 7;
     this.scheduleSave();
     return true;
   }
@@ -290,12 +297,15 @@ export class Repository {
    * only ever targets buckets the user already has — nothing is auto-created.
    */
   private autoTag(text: string): string[] {
-    const lexicon: string[] = [];
+    const matched: string[] = [];
     for (const concept of matchConcepts(tokenize(text))) {
       // ALL buckets of the concept: someone who shops at both Coles and
       // Woolworths wants grocery items on both stores' lists.
-      lexicon.push(...this.liveBucketsForConcept(concept));
+      matched.push(...this.liveBucketsForConcept(concept));
     }
+    // Two concepts can resolve to the same store (a department store), so
+    // dedupe — "linen button shirt" must not list Kmart twice.
+    const lexicon = [...new Set(matched)];
     // A mixed capture spanning several buckets ("celery and a drill bit")
     // beats the classifier's single-bucket guess, which would otherwise let
     // the dominant category drown out the other item.
