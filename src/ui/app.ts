@@ -68,7 +68,7 @@ const LOOKUP_CACHE_KEY = "smart-to-do/lookup-cache";
 const LOOKUP_MIN_INTERVAL_MS = 6500;
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v17 · broader to-do";
+const APP_VERSION = "v18 · trail runs + copy";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -469,6 +469,13 @@ function renderRow(task: TaskRecord): HTMLElement {
     });
     row.append(assign);
   }
+  const copy = iconButton("row-copy", "⧉", "Copy this item", () => {
+    void navigator.clipboard.writeText(task.title).then(
+      () => flashButton(copy, "✓"),
+      () => flashButton(copy, "✕"),
+    );
+  });
+  row.append(copy);
   row.append(
     iconButton("row-delete", "×", "Delete", () => {
       snapshot();

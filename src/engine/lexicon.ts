@@ -108,7 +108,11 @@ const RAW: RawConcept[] = [
       "doctor dentist gp optometrist physio physiotherapist chiro chiropractor osteo podiatrist dermatologist cardiologist psychologist psychiatrist counsellor counselling therapist therapy dietitian specialist appointment checkup consult consultation assessment screening xray mri ultrasound pathology bloods referral vaccination vaccine booster jab flu surgery operation procedure hospital clinic emergency medicare bulkbill prescription allergy rehab dental filling crown rootcanal orthodontist braces blood skin mole biopsy hearing audiology dietician nutritionist " +
       // Activities, admin, finance and planning — tasks you DO, not objects you buy.
       "class classes lesson lessons course workshop seminar tutorial session masterclass rehearsal audition recital lecture practice practise revise study learn plan planning organise arrange schedule reschedule draft outline brainstorm followup chase remind reply respond call phone rsvp financial finance budget insurance superannuation super rebate refund claim invoice statement bill mortgage rent utility booking reservation reserve meetup interview visit lodge dispute complaint quote enquiry review sort collect pickup dropoff post mail parcel courier " +
-      "pay electricity book haircut hairdresser barber salon manicure pedicure massage waxing membership renew passport visa licence rego appointment",
+      "pay electricity book haircut hairdresser barber salon manicure pedicure massage waxing membership renew passport visa licence rego appointment " +
+      // Activity VERBS only (base form). "runs"→"run" is caught, but the gear
+      // form "running" (running shoes) stems differently and is NOT — so the
+      // activity files into To-do while the purchase stays with the store.
+      "run jog swim walk ride cycle marathon parkrun",
   },
   {
     name: "work",
