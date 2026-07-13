@@ -130,10 +130,19 @@ describe("Seed lexicon", () => {
 
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("To-do");
+    repo.createBucket("Uniqlo");
+    repo.createBucket("Kmart");
     assert.deepEqual(repo.addTask("book a dentist appointment").buckets, ["To-do"]);
     assert.deepEqual(repo.addTask("physio referral for my knee").buckets, ["To-do"]);
     assert.deepEqual(repo.addTask("do my tax return on mygov").buckets, ["To-do"]);
     assert.deepEqual(repo.addTask("cancel my gym subscription").buckets, ["To-do"]);
+    // Broadened: activities, admin, finance and planning are tasks, not objects.
+    assert.deepEqual(repo.addTask("cooking class").buckets, ["To-do"]);
+    assert.deepEqual(repo.addTask("use claude for financial planning").buckets, ["To-do"]);
+    assert.deepEqual(repo.addTask("pay the electricity bill").buckets, ["To-do"]);
+    assert.deepEqual(repo.addTask("book a haircut").buckets, ["To-do"]);
+    // But object purchases must NOT be dragged into To-do.
+    assert.deepEqual(repo.addTask("running shoes").buckets.sort(), ["Kmart", "Uniqlo"]);
   });
 
   it("adds an Outdoor category and resolves descriptive product names", async () => {
