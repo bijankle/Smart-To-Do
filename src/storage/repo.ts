@@ -20,9 +20,11 @@ import {
   conceptForBucketName,
   extraConceptsForBucketName,
   matchConcepts,
+  TASK_VERBS,
+  TODO_CONCEPT,
   type Concept,
 } from "../engine/lexicon.js";
-import { tokenize } from "../engine/tokenize.js";
+import { stem, tokenize } from "../engine/tokenize.js";
 import { DEFAULT_CONFIDENCE_THRESHOLD } from "../engine/parse.js";
 import {
   createDoc,
@@ -297,6 +299,14 @@ export class Repository {
    * only ever targets buckets the user already has — nothing is auto-created.
    */
   private autoTag(text: string): string[] {
+    // A leading imperative verb ("rotate the mattress", "clean the boots") marks
+    // a chore/admin task about an object, not a purchase — file it in To-do only.
+    const firstWord = text.trim().toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)[0];
+    if (firstWord && TASK_VERBS.has(stem(firstWord)) && TODO_CONCEPT) {
+      const todo = this.liveBucketsForConcept(TODO_CONCEPT);
+      if (todo.length > 0) return todo;
+    }
+
     const matched: string[] = [];
     for (const concept of matchConcepts(tokenize(text))) {
       // ALL buckets of the concept: someone who shops at both Coles and

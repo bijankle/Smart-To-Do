@@ -143,6 +143,13 @@ describe("Seed lexicon", () => {
     assert.deepEqual(repo.addTask("book a haircut").buckets, ["To-do"]);
     // But object purchases must NOT be dragged into To-do.
     assert.deepEqual(repo.addTask("running shoes").buckets.sort(), ["Kmart", "Uniqlo"]);
+
+    // A leading chore verb makes it a task about an object, not a purchase.
+    assert.deepEqual(repo.addTask("rotate the mattress").buckets, ["To-do"]);
+    assert.deepEqual(repo.addTask("clean and condition leather boots").buckets, ["To-do"]);
+    assert.deepEqual(repo.addTask("back up my photos and files").buckets, ["To-do"]);
+    // …but the gerund form is a product, so it stays with the store.
+    assert.deepEqual(repo.addTask("cleaning cloths").buckets, ["Kmart"]);
   });
 
   it("adds an Outdoor category and resolves descriptive product names", async () => {
@@ -254,7 +261,7 @@ describe("Repository — multi-bucket tagging", () => {
   it("renaming an untagged task re-runs auto-tagging (garbled beyond repair)", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("To-do");
-    const task = repo.addTask("book a dzntxst zppt"); // too mangled even for fuzzy
+    const task = repo.addTask("zxq dzntxst zppt"); // too mangled even for fuzzy
     assert.deepEqual(task.buckets, []);
     repo.renameTask(task.id, "book a dentist appointment");
     assert.deepEqual(repo.getTask(task.id)!.buckets, ["To-do"]);

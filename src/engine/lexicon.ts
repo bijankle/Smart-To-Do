@@ -65,7 +65,7 @@ const RAW: RawConcept[] = [
     name: "electronics",
     aliases: "electronics electronic tech gadgets gadget jb jbhifi bestbuy harvey",
     vocabulary:
-      "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud noise speaker soundbar bluetooth phone tablet android camera webcam lens drone console controller router modem printer ssd harddrive drive ram memory sd microsd gpu cpu processor motherboard case fan projector smartwatch smart fitbit kindle remote antenna surge protector powerbank sim stylus tripod microphone gopro chromecast roku firestick playstation xbox nintendo turntable vinyl record player stick dash dashcam cd dvd computer ipod radio boombox headset wristwatch fridge freezer microwave dishwasher washer dryer appliance samsung apple sony jbl bose logitech sandisk seagate anker belkin tplink dlink asus acer lenovo dell brother epson canon airpods iphone ipad macbook pixel galaxy chromebook dyson dualsense ps5 ps4 earphone typec subwoofer amplifier gamepad joystick powerboard mousepad ringlight nvme mesh soundbar streamingstick gimbal action monopod ereader graphicscard psu heatsink thermalpaste capturecard docking hub kvm switch nas modem powerline networking cat6 optical toslink aux rca coaxial hdmicable displaycable adaptor voltage inverter multimeter",
+      "tv television monitor screen laptop keyboard mouse charger cable cord hdmi usb ethernet adapter dongle headphone earbud noise speaker soundbar bluetooth phone tablet android camera webcam lens drone console controller router modem printer ssd harddrive drive ram memory sd microsd gpu cpu processor motherboard case fan projector smartwatch smart fitbit kindle remote antenna surge protector powerbank sim stylus tripod microphone gopro chromecast roku firestick playstation xbox nintendo turntable vinyl record player stick dash dashcam cd dvd computer ipod radio boombox headset wristwatch fridge freezer microwave dishwasher washer dryer appliance samsung apple sony jbl bose logitech sandisk seagate anker belkin tplink dlink asus acer lenovo dell brother epson canon airpods iphone ipad macbook pixel galaxy chromebook dyson dualsense ps5 ps4 earphone typec subwoofer amplifier gamepad joystick powerboard mousepad ringlight nvme mesh soundbar streamingstick gimbal action monopod ereader graphicscard psu heatsink thermalpaste capturecard docking hub kvm switch nas modem powerline networking cat6 optical toslink aux rca coaxial hdmicable displaycable adaptor voltage inverter multimeter airtag tracker gps geotag",
   },
   {
     name: "stationery",
@@ -83,7 +83,7 @@ const RAW: RawConcept[] = [
     name: "homewares",
     aliases: "homewares kmart target bigw",
     vocabulary:
-      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle jigsaw lego doll craft wrapping ribbon balloon party hamper mat doormat clock peg chopping board airfryer fryer drink bottle lunchbox thermos tennis soccer basketball baseball netball cricket racket racquet yarn knitting sewing thread umbrella picnic helmet incense album christmas ornament tinsel bauble rolling whisk grater peeler tong strainer spatula ladle knife fork spoon dice domino playing needle thimble button zipper washcloth plush teddy flyswatter swat sistema pyrex corelle tefal raco tupperware tontine rag cloth resistance dumbbell dumbbells kettlebell skipping toner astringent micellar exfoliant witch hazel scooter skateboard trampoline tumbler placemat coaster tablecloth apron colander casserole ramekin platter pitcher beanbag pillowcase sandwichpress mandoline masher ricer zester corer trivet caddy doorstop airer clotheshorse drying dryingrack squeegee dustpan bath bathmat showercurtain teapot canister crockery dinnerware glassware wineglass champagne flute mug coaster placemat serviette",
+      "storage container basket bin tub hanger organiser organizer kitchenware plate bowl mug cup glass cutlery utensil pan pot tray jug kettle toaster blender bedding pillow blanket duvet quilt doona towel candle decor frame vase pot planter toy game puzzle jigsaw lego doll craft wrapping ribbon balloon party hamper mat doormat clock peg chopping board airfryer fryer drink bottle lunchbox thermos tennis soccer basketball baseball netball cricket racket racquet yarn knitting sewing thread umbrella picnic helmet incense album christmas ornament tinsel bauble rolling whisk grater peeler tong strainer spatula ladle knife fork spoon dice domino playing needle thimble button zipper washcloth plush teddy flyswatter swat sistema pyrex corelle tefal raco tupperware tontine rag cloth resistance dumbbell dumbbells kettlebell skipping toner astringent micellar exfoliant witch hazel scooter skateboard trampoline tumbler placemat coaster tablecloth apron colander casserole ramekin platter pitcher beanbag pillowcase sandwichpress mandoline masher ricer zester corer scale scales kitchenscale trivet caddy doorstop airer clotheshorse drying dryingrack squeegee dustpan bath bathmat showercurtain teapot canister crockery dinnerware glassware wineglass champagne flute mug coaster placemat serviette",
   },
   {
     name: "clothing",
@@ -108,7 +108,7 @@ const RAW: RawConcept[] = [
       "doctor dentist gp optometrist physio physiotherapist chiro chiropractor osteo podiatrist dermatologist cardiologist psychologist psychiatrist counsellor counselling therapist therapy dietitian specialist appointment checkup consult consultation assessment screening xray mri ultrasound pathology bloods referral vaccination vaccine booster jab flu surgery operation procedure hospital clinic emergency medicare bulkbill prescription allergy rehab dental filling crown rootcanal orthodontist braces blood skin mole biopsy hearing audiology dietician nutritionist " +
       // Activities, admin, finance and planning — tasks you DO, not objects you buy.
       "class classes lesson lessons course workshop seminar tutorial session masterclass rehearsal audition recital lecture practice practise revise study learn plan planning organise arrange schedule reschedule draft outline brainstorm followup chase remind reply respond call phone rsvp financial finance budget insurance superannuation super rebate refund claim invoice statement bill mortgage rent utility booking reservation reserve meetup interview visit lodge dispute complaint quote enquiry review sort collect pickup dropoff post mail parcel courier " +
-      "pay electricity book haircut hairdresser barber salon manicure pedicure massage waxing membership renew passport visa licence rego appointment " +
+      "pay electricity haircut hairdresser barber salon manicure pedicure massage waxing membership renew passport visa licence rego appointment " +
       // Activity VERBS only (base form). "runs"→"run" is caught, but the gear
       // form "running" (running shoes) stems differently and is NOT — so the
       // activity files into To-do while the purchase stays with the store.
@@ -213,6 +213,26 @@ const STORE_EXTRA_CONCEPTS: Array<{ alias: string; concepts: string[] }> = [
   { alias: "bigw", concepts: ["clothing", "furniture", "stationery"] },
 ];
 
+/**
+ * Imperative verbs that mark a capture as a chore/admin TASK, not a purchase —
+ * "rotate the mattress" or "clean the boots" is a To-do about an object, not a
+ * shopping item. Matched only in LEADING position (the base form): "clean the
+ * counter" is a task, while "cleaning products" (the gerund) is a purchase.
+ * Deliberately excludes verbs that usually imply buying (replace/install/fix)
+ * and shopping verbs (buy/get/grab, which are stopwords).
+ */
+const TASK_VERBS_RAW =
+  "clean wipe rotate scrub vacuum mop dust tidy declutter purge wash launder fold defrost " +
+  "flip empty organise organize sort backup unsubscribe cancel renew book plan schedule pay " +
+  "call phone email remind arrange sign apply submit lodge claim dispute chase contact visit " +
+  "collect return exchange donate recycle rearrange reorganise go do use check review research " +
+  "learn study prepare prep draft write download upload update configure enrol reconcile feed " +
+  "walk cook bake sweep declutter defrost sell post mail back";
+export const TASK_VERBS = new Set(stemWords(TASK_VERBS_RAW));
+
+/** The concept for the To-do bucket, resolved once. */
+export const TODO_CONCEPT = CONCEPTS.find((c) => c.name === "todo") ?? null;
+
 export function extraConceptsForBucketName(name: string): Set<string> {
   const words = new Set(name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).map(stem));
   const out = new Set<string>();
@@ -244,7 +264,12 @@ const FILLER = new Set(
     "set pack packet piece pair mini large small medium jumbo travel waterproof " +
       "portable adjustable premium deluxe assorted non nonslip slip double single " +
       "multi combo value bulk family size foldable folding reusable lightweight compact " +
-      "cheap basic plain simple standard classic essential everyday",
+      "cheap basic plain simple standard classic essential everyday " +
+      // Descriptive adjectives that bury the real noun in verbose captures.
+      "high quality good really great nice best digital physical professional local " +
+      "fresh freshly personal genuine authentic proper decent solid sturdy durable " +
+      "pressure free wireless electric electronic rechargeable insulated ergonomic " +
+      "brand favourite favorite nice little",
   ),
 );
 

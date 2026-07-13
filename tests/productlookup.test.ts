@@ -64,8 +64,8 @@ describe("Online product lookup", () => {
     });
     repo.createBucket("Coles");
     repo.createBucket("Chemist Warehouse");
-    const task = repo.addTask("some obscure brand snack");
-    assert.deepEqual(task.buckets, []); // lexicon can't place it
+    const task = repo.addTask("zxcv qwer asdf"); // lexicon can't place it
+    assert.deepEqual(task.buckets, []);
 
     const buckets = [...new Set(["groceries"].flatMap((c) => repo.bucketsForConceptName(c)))];
     assert.deepEqual(buckets, ["Coles"]);
