@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#ff5864" />
+  <title>Swipe Shop — teach it your taste</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='22' fill='%23ff5864'/%3E%3Ctext x='32' y='44' font-family='sans-serif' font-size='34' text-anchor='middle'%3E%F0%9F%9B%8D%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./app.css" />
+  <script type="module" src="./src/app.js"></script>
+</head>
+<body>
+  <main class="shop">
+    <header class="shop-header">
+      <div class="shop-logo">🛍</div>
+      <div class="shop-titles">
+        <span class="shop-name">Swipe Shop</span>
+        <span class="shop-sub">Swipe to teach it your taste · buying happens on the store’s own site</span>
+      </div>
+      <div class="strength" title="How well the algorithm knows you">
+        <span class="strength-label" id="strength-label">Untrained</span>
+        <span class="strength-meter"><span class="strength-fill" id="strength-fill"></span></span>
+      </div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button type="button" class="tab is-active" id="tab-deck" role="tab" aria-selected="true">Discover</button>
+      <button type="button" class="tab" id="tab-profile" role="tab" aria-selected="false">
+        My profile <span class="tab-badge" id="shortlist-count" hidden></span>
+      </button>
+    </nav>
+
+    <!-- ================== Discover (deck) view ================== -->
+    <section id="view-deck" class="view">
+      <div class="stack-wrap">
+        <div id="stack" class="stack" aria-live="polite"></div>
+
+        <div id="deck-empty" class="deck-empty" hidden>
+          <div class="deck-empty-emoji">🎉</div>
+          <h2>You’ve swiped the whole catalog</h2>
+          <p>Your shopping profile is fully trained on this feed. Check your
+             profile and shortlist — or wipe the slate and start again.</p>
+          <div class="deck-empty-actions">
+            <button type="button" class="btn btn-primary" id="empty-to-profile">See my profile</button>
+            <button type="button" class="btn btn-ghost" id="empty-reset">Start over</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions" id="actions">
+        <button type="button" class="act act-undo" id="act-undo" title="Undo last swipe (U)" aria-label="Undo">↶</button>
+        <button type="button" class="act act-nope" id="act-nope" title="Not for me (←)" aria-label="Nope">✕</button>
+        <button type="button" class="act act-love" id="act-love" title="Need it! (↑)" aria-label="Love">★</button>
+        <button type="button" class="act act-like" id="act-like" title="I like it (→)" aria-label="Like">♥</button>
+        <a class="act act-open" id="act-open" title="Open on the store’s site (O)" aria-label="Open on store site"
+           href="#" target="_blank" rel="noopener noreferrer">↗</a>
+      </div>
+
+      <p class="hint">Drag the card, use the buttons, or keys: ← nope · → like · ↑ need it · U undo · O opens the store</p>
+      <p class="deck-progress" id="deck-progress"></p>
+    </section>
+
+    <!-- ================== Profile view ================== -->
+    <section id="view-profile" class="view" hidden>
+      <div id="profile-body"></div>
+    </section>
+
+    <div id="toast" class="toast" hidden></div>
+  </main>
+</body>
+</html>
