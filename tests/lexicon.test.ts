@@ -47,15 +47,16 @@ describe("Seed lexicon", () => {
 
   it("recognizes store names and medical phrasing", () => {
     assert.equal(conceptForBucketName("Bunnings")?.name, "hardware");
-    assert.equal(conceptForBucketName("JB Hi-Fi")?.name, "electronics");
+    assert.equal(conceptForBucketName("Electronics")?.name, "electronics");
     assert.equal(conceptForBucketName("jbhifi")?.name, "electronics");
     assert.equal(conceptForBucketName("Woolworths")?.name, "groceries");
-    assert.equal(conceptForBucketName("Coles")?.name, "groceries");
-    assert.equal(conceptForBucketName("Chemist Warehouse")?.name, "chemist");
-    assert.equal(conceptForBucketName("Officeworks")?.name, "stationery");
+    assert.equal(conceptForBucketName("Grocer")?.name, "groceries");
+    assert.equal(conceptForBucketName("Chemist")?.name, "chemist");
+    assert.equal(conceptForBucketName("Office")?.name, "stationery");
     assert.equal(conceptForBucketName("Ikea")?.name, "furniture");
     assert.equal(conceptForBucketName("Kmart")?.name, "homewares");
-    assert.equal(conceptForBucketName("Uniqlo")?.name, "clothing");
+    assert.equal(conceptForBucketName("Clothing")?.name, "clothing");
+    assert.equal(conceptForBucketName("Footwear")?.name, "footwear");
     assert.deepEqual(names(matchConcepts(tokenize("book a dentist appointment"))), ["todo"]);
   });
 
@@ -64,29 +65,29 @@ describe("Seed lexicon", () => {
     assert.deepEqual(names(matchConcepts(tokenize("bandaids and lube"))), ["chemist", "groceries"]);
 
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
-    repo.createBucket("Coles");
-    repo.createBucket("Chemist Warehouse");
+    repo.createBucket("Grocer");
+    repo.createBucket("Chemist");
     const task = repo.addTask("condoms");
-    assert.deepEqual([...task.buckets].sort(), ["Chemist Warehouse", "Coles"]);
+    assert.deepEqual([...task.buckets].sort(), ["Chemist", "Grocer"]);
     assert.deepEqual([...repo.addTask("panadol and bandaids").buckets].sort(), [
-      "Chemist Warehouse",
-      "Coles",
+      "Chemist",
+      "Grocer",
     ]);
   });
 
   it("two supermarkets both get grocery items", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
-    repo.createBucket("Coles");
+    repo.createBucket("Grocer");
     repo.createBucket("Woolworths");
     const task = repo.addTask("milk and bread");
-    assert.deepEqual([...task.buckets].sort(), ["Coles", "Woolworths"]);
+    assert.deepEqual([...task.buckets].sort(), ["Grocer", "Woolworths"]);
   });
 
   it("understands brand names ('milo and glad wrap')", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
-    repo.createBucket("Coles");
+    repo.createBucket("Grocer");
     repo.createBucket("Bunnings");
-    assert.deepEqual(repo.addTask("milo and glad wrap").buckets, ["Coles"]);
+    assert.deepEqual(repo.addTask("milo and glad wrap").buckets, ["Grocer"]);
     assert.deepEqual(repo.addTask("ryobi drill and dulux paint").buckets, ["Bunnings"]);
   });
 
@@ -94,19 +95,19 @@ describe("Seed lexicon", () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     const stuck = repo.addTask("bandaids"); // no buckets exist yet
     assert.deepEqual(stuck.buckets, []);
-    repo.createBucket("Coles");
-    repo.createBucket("Chemist Warehouse");
+    repo.createBucket("Grocer");
+    repo.createBucket("Chemist");
     repo.retagUntagged();
-    assert.deepEqual([...repo.getTask(stuck.id)!.buckets].sort(), ["Chemist Warehouse", "Coles"]);
+    assert.deepEqual([...repo.getTask(stuck.id)!.buckets].sort(), ["Chemist", "Grocer"]);
   });
 
   it("retagUntagged never re-adds tags the user removed", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
-    repo.createBucket("Coles");
-    repo.createBucket("Chemist Warehouse");
+    repo.createBucket("Grocer");
+    repo.createBucket("Chemist");
     const task = repo.addTask("condoms");
-    repo.toggleBucket(task.id, "Coles"); // user says: not from Coles
-    repo.toggleBucket(task.id, "Chemist Warehouse"); // ...nor the chemist
+    repo.toggleBucket(task.id, "Grocer"); // user says: not from Grocer
+    repo.toggleBucket(task.id, "Chemist"); // ...nor the chemist
     assert.deepEqual(repo.getTask(task.id)!.buckets, []);
     repo.retagUntagged();
     assert.deepEqual(repo.getTask(task.id)!.buckets, []);
@@ -115,9 +116,9 @@ describe("Seed lexicon", () => {
   it("files clothing and stationery runs into store buckets", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("uniqlo");
-    repo.createBucket("Officeworks");
+    repo.createBucket("Office");
     assert.deepEqual(repo.addTask("socks and a hoodie").buckets, ["uniqlo"]);
-    assert.deepEqual(repo.addTask("stapler and highlighters").buckets, ["Officeworks"]);
+    assert.deepEqual(repo.addTask("stapler and highlighters").buckets, ["Office"]);
   });
 
   it("routes non-shopping tasks (admin + appointments) to a single To-do bucket", async () => {
@@ -130,7 +131,8 @@ describe("Seed lexicon", () => {
 
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("To-do");
-    repo.createBucket("Uniqlo");
+    repo.createBucket("Clothing");
+    repo.createBucket("Footwear");
     repo.createBucket("Kmart");
     assert.deepEqual(repo.addTask("book a dentist appointment").buckets, ["To-do"]);
     assert.deepEqual(repo.addTask("physio referral for my knee").buckets, ["To-do"]);
@@ -141,8 +143,9 @@ describe("Seed lexicon", () => {
     assert.deepEqual(repo.addTask("use claude for financial planning").buckets, ["To-do"]);
     assert.deepEqual(repo.addTask("pay the electricity bill").buckets, ["To-do"]);
     assert.deepEqual(repo.addTask("book a haircut").buckets, ["To-do"]);
-    // But object purchases must NOT be dragged into To-do.
-    assert.deepEqual(repo.addTask("running shoes").buckets.sort(), ["Kmart", "Uniqlo"]);
+    // But object purchases must NOT be dragged into To-do — shoes now file
+    // into their own Footwear bucket (moved out of clothing).
+    assert.deepEqual(repo.addTask("running shoes").buckets, ["Footwear"]);
 
     // A leading chore verb makes it a task about an object, not a purchase.
     assert.deepEqual(repo.addTask("rotate the mattress").buckets, ["To-do"]);
@@ -155,7 +158,7 @@ describe("Seed lexicon", () => {
   it("adds an Outdoor category and resolves descriptive product names", async () => {
     assert.equal(conceptForBucketName("Outdoor")?.name, "outdoor");
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
-    for (const b of ["Coles", "Chemist Warehouse", "Kmart", "Outdoor", "Officeworks"]) {
+    for (const b of ["Grocer", "Chemist", "Kmart", "Outdoor", "Office"]) {
       repo.createBucket(b);
     }
     // Descriptive filler ("non-slip", "1000-piece", "set") no longer suppresses
@@ -166,22 +169,22 @@ describe("Seed lexicon", () => {
     // Outdoor gear routes to the new pill.
     assert.deepEqual(repo.addTask("camping hammock").buckets, ["Outdoor"]);
     assert.deepEqual(repo.addTask("kayak paddle").buckets, ["Outdoor"]);
-    // Beauty toner → Kmart + Chemist; printer toner → Officeworks (+ Kmart stationery).
-    assert.deepEqual(repo.addTask("witch hazel toner").buckets.sort(), ["Chemist Warehouse", "Kmart"]);
-    assert.deepEqual(repo.addTask("printer toner cartridge").buckets.sort(), ["Kmart", "Officeworks"]);
+    // Beauty toner → Kmart + Chemist; printer toner → Office (+ Kmart stationery).
+    assert.deepEqual(repo.addTask("witch hazel toner").buckets.sort(), ["Chemist", "Kmart"]);
+    assert.deepEqual(repo.addTask("printer toner cartridge").buckets.sort(), ["Kmart", "Office"]);
   });
 
-  it("files general clothing into Kmart as well as Uniqlo", async () => {
+  it("files general clothing into Kmart as well as Clothing", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
-    for (const b of ["Uniqlo", "Kmart", "Ikea"]) repo.createBucket(b);
-    assert.deepEqual(repo.addTask("jacket").buckets.sort(), ["Kmart", "Uniqlo"]);
-    assert.deepEqual(repo.addTask("socks").buckets.sort(), ["Kmart", "Uniqlo"]);
+    for (const b of ["Clothing", "Kmart", "Ikea"]) repo.createBucket(b);
+    assert.deepEqual(repo.addTask("jacket").buckets.sort(), ["Clothing", "Kmart"]);
+    assert.deepEqual(repo.addTask("socks").buckets.sort(), ["Clothing", "Kmart"]);
     // A wardrobe is furniture, not apparel — Ikea, and Kmart (also stocks furniture).
     assert.deepEqual(repo.addTask("wardrobe").buckets.sort(), ["Ikea", "Kmart"]);
-    // Without a Kmart pill, clothing still just goes to Uniqlo.
+    // Without a Kmart pill, clothing still just goes to Clothing.
     const solo = await Repository.open(new MemoryPersistence(), makeOptions());
-    solo.createBucket("Uniqlo");
-    assert.deepEqual(solo.addTask("jacket").buckets, ["Uniqlo"]);
+    solo.createBucket("Clothing");
+    assert.deepEqual(solo.addTask("jacket").buckets, ["Clothing"]);
   });
 
   it("matches a decisive single word ('laptop')", () => {
@@ -215,16 +218,16 @@ describe("Typo failsafe", () => {
 
   it("captures with typos still file correctly", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
-    repo.createBucket("Coles");
-    repo.createBucket("Chemist Warehouse");
-    assert.deepEqual([...repo.addTask("tw33zer").buckets].sort(), ["Chemist Warehouse", "Coles"]);
+    repo.createBucket("Grocer");
+    repo.createBucket("Chemist");
+    assert.deepEqual([...repo.addTask("tw33zer").buckets].sort(), ["Chemist", "Grocer"]);
     assert.deepEqual([...repo.addTask("tweezers for balls").buckets].sort(), [
-      "Chemist Warehouse",
-      "Coles",
+      "Chemist",
+      "Grocer",
     ]);
     // "t9ilet paper": both words resolve, and the strong groceries pair
     // (toilet + paper) suppresses the stationery reading of "paper".
-    assert.deepEqual(repo.addTask("t9ilet paper").buckets, ["Coles"]);
+    assert.deepEqual(repo.addTask("t9ilet paper").buckets, ["Grocer"]);
   });
 });
 
@@ -240,14 +243,14 @@ describe("Repository — multi-bucket tagging", () => {
     assert.equal(repo.listTasks("hardware")[0]!.id, task.id);
   });
 
-  it("store-name buckets behave as their category (Bunnings, JB Hi-Fi)", async () => {
+  it("store-name buckets behave as their category (Bunnings, Electronics)", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.createBucket("Bunnings");
-    repo.createBucket("JB Hi-Fi");
+    repo.createBucket("Electronics");
     assert.deepEqual(repo.addTask("screws and paint").buckets, ["Bunnings"]);
-    assert.deepEqual(repo.addTask("hdmi cable and a charger").buckets, ["JB Hi-Fi"]);
+    assert.deepEqual(repo.addTask("hdmi cable and a charger").buckets, ["Electronics"]);
     const mixed = repo.addTask("drill bits and a webcam");
-    assert.deepEqual([...mixed.buckets].sort(), ["Bunnings", "JB Hi-Fi"]);
+    assert.deepEqual([...mixed.buckets].sort(), ["Bunnings", "Electronics"]);
   });
 
   it("files appointment phrasing into the To-do bucket, typos included", async () => {

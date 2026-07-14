@@ -14,7 +14,7 @@ describe("PDF export", () => {
       title: "Smart To-Do",
       subtitle: "3 items",
       sections: [
-        { name: "Coles", items: ["milk", "eggs"] },
+        { name: "Grocer", items: ["milk", "eggs"] },
         { name: "Bunnings", items: ["box of screws"] },
       ],
     });
@@ -37,17 +37,17 @@ describe("PDF export", () => {
     const pdf = toLatin1(
       buildListPdf({
         title: "My List",
-        sections: [{ name: "Chemist Warehouse", items: ["toothpaste", "vitamin c"] }],
+        sections: [{ name: "Chemist", items: ["toothpaste", "vitamin c"] }],
       }),
     );
-    assert.ok(pdf.includes("Chemist Warehouse"));
+    assert.ok(pdf.includes("Chemist"));
     assert.ok(pdf.includes("toothpaste"));
     assert.ok(pdf.includes("My List"));
   });
 
   it("paginates long lists across multiple pages", () => {
     const items = Array.from({ length: 120 }, (_, i) => `Item number ${i}`);
-    const pdf = toLatin1(buildListPdf({ title: "Big", sections: [{ name: "Coles", items }] }));
+    const pdf = toLatin1(buildListPdf({ title: "Big", sections: [{ name: "Grocer", items }] }));
     const pageCount = (pdf.match(/\/Type \/Page[^s]/g) ?? []).length;
     assert.ok(pageCount >= 2, `expected multiple pages, got ${pageCount}`);
     const count = /\/Count (\d+)/.exec(pdf);

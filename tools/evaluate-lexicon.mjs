@@ -1,12 +1,12 @@
 // Lexicon integrity harness: runs a corpus of realistic captures through the
-// real engine (fresh store, the owner's eight store buckets) and grades the
+// real engine (fresh store, the owner's category buckets) and grades the
 // tagging. Run with:  npm run build && node tools/evaluate-lexicon.mjs
 import { Repository } from "../dist/src/storage/repo.js";
 import { MemoryPersistence } from "../dist/src/storage/persistence.js";
 
-const C = "Coles", B = "Bunnings", CW = "Chemist Warehouse", JB = "JB Hi-Fi",
-  OW = "Officeworks", IK = "Ikea", KM = "Kmart", UQ = "Uniqlo";
-const STORES = [C, B, CW, JB, OW, IK, KM, UQ];
+const C = "Grocer", B = "Bunnings", CW = "Chemist", JB = "Electronics",
+  OW = "Office", IK = "Ikea", KM = "Kmart", UQ = "Clothing", FW = "Footwear";
+const STORES = [C, B, CW, JB, OW, IK, KM, UQ, FW];
 
 // [capture text, required stores, optionally-acceptable extra stores]
 const CASES = [
@@ -101,7 +101,10 @@ const CASES = [
   ["jocks", [UQ, KM]], ["trackies", [UQ, KM]], ["puffer jacket", [UQ, KM]],
   ["linen shirt", [UQ, KM]], ["chinos", [UQ, KM]], ["belt", [UQ, KM]],
   ["thermals", [UQ, KM]], ["hoodie", [UQ, KM]], ["work shirts", [UQ, KM]],
-  ["running shoes", [UQ, KM]], ["beanie", [UQ, KM]],
+  ["beanie", [UQ, KM]],
+  // ---- Footwear (its own bucket now, no longer clothing) ----
+  ["running shoes", [FW]], ["sneakers", [FW]], ["sandals", [FW]],
+  ["thongs", [FW]], ["leather boots", [FW]], ["slippers", [FW]],
   // ---- typo resilience ----
   ["tomatoe sauce", [C]], ["shampoo and conditionar", [C, CW]],
   ["scr3ws", [B]], ["keybord", [JB]], ["blueberrys", [C]],
@@ -115,7 +118,7 @@ const CASES = [
   ["compression stockings", [CW], [UQ, KM]], ["subwoofer", [JB]],
   ["mouse pad", [JB]], ["wall clock", [KM]], ["tablecloth", [KM]],
   ["witch hazel toner", [KM, CW]], ["printer toner cartridge", [OW]],
-  ["caster sugar", [C]], ["hiking boots", [UQ, KM]], ["balaclava", [UQ, KM]],
+  ["caster sugar", [C]], ["hiking boots", [FW]], ["balaclava", [UQ, KM]],
   // ---- convenience foods, med abbreviations, brand eponyms ----
   ["ready meals", [C]], ["frozen lasagne", [C]], ["microwave rice", [C]],
   ["chicken nuggets", [C]], ["mg tablets", [CW]], ["vitamin d tablets", [CW, C]],

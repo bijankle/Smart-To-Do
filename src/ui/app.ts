@@ -38,27 +38,29 @@ let graceTimer: number | undefined;
  * folds any generic starter buckets into them.
  */
 const MY_PILLS = [
-  // Stores
-  "Coles",
+  // Stores (named by category)
+  "Grocer",
   "Bunnings",
-  "Chemist Warehouse",
-  "JB Hi-Fi",
-  "Officeworks",
+  "Chemist",
+  "Electronics",
+  "Office",
   "Ikea",
   "Kmart",
-  "Uniqlo",
+  "Clothing",
+  "Footwear",
   "Outdoor",
   // Non-shopping tasks (admin, computer/online chores, appointments)
   "To-do",
 ];
 const GENERIC_REMAP: Record<string, string> = {
-  groceries: "Coles",
-  food: "Coles",
+  groceries: "Grocer",
+  food: "Grocer",
   hardware: "Bunnings",
   tools: "Bunnings",
-  electronics: "JB Hi-Fi",
-  tech: "JB Hi-Fi",
-  clothing: "Uniqlo",
+  electronics: "Electronics",
+  tech: "Electronics",
+  clothing: "Clothing",
+  footwear: "Footwear",
 };
 
 const CLIENT_ID_KEY = "smart-to-do/drive-client-id";
@@ -69,7 +71,7 @@ const LOOKUP_CACHE_KEY = "smart-to-do/lookup-cache";
 const LOOKUP_MIN_INTERVAL_MS = 6500;
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v25 · share in list bar";
+const APP_VERSION = "v26 · categories + download";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -680,8 +682,9 @@ function renderList(): void {
       bar.className = "list-actions";
 
       // Share (PDF) — exports the current view: this tag, or every bucket in All.
+      // Opens a small menu offering Download or the native share sheet.
       const share = svgButton("row-share list-icon", SHARE_SVG, sharePdfTitle(), () =>
-        void shareListPdf(share),
+        openShareMenu(share),
       );
 
       // Copy-all (⧉) — copies the whole list as an item + categories table.
@@ -924,12 +927,55 @@ function todayLabel(): string {
   return `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
 }
 
+/** True when the browser can share a file via the native share sheet. */
+function canShareFiles(): boolean {
+  return typeof navigator.share === "function" && typeof navigator.canShare === "function";
+}
+
 /**
- * Build a PDF of the lists and hand it off: the native share sheet with the
- * file attached on mobile (so it can go to anyone/anywhere), or a download on
- * desktop. No server, no mirror site — just a printable snapshot.
+ * The share button opens a small menu: "Download PDF" always, plus "Share…"
+ * (the native share sheet with the file attached) where the browser supports
+ * it. If it doesn't, clicking share just downloads. Either way it exports the
+ * current view — a single tag, or every bucket in All.
  */
-async function shareListPdf(button: HTMLButtonElement): Promise<void> {
+function openShareMenu(anchor: HTMLElement): void {
+  if (!canShareFiles()) {
+    void exportListPdf("download", anchor as HTMLButtonElement);
+    return;
+  }
+  closeTagMenu();
+  const menu = document.createElement("div");
+  menu.className = "tag-menu";
+  menu.id = "tag-menu";
+
+  const download = document.createElement("button");
+  download.type = "button";
+  download.className = "tag-menu-item";
+  download.textContent = "Download PDF";
+  download.addEventListener("click", () => {
+    closeTagMenu();
+    void exportListPdf("download", anchor as HTMLButtonElement);
+  });
+
+  const share = document.createElement("button");
+  share.type = "button";
+  share.className = "tag-menu-item";
+  share.textContent = "Share…";
+  share.addEventListener("click", () => {
+    closeTagMenu();
+    void exportListPdf("share", anchor as HTMLButtonElement);
+  });
+
+  menu.append(download, share);
+  const rect = anchor.getBoundingClientRect();
+  menu.style.top = `${rect.bottom + window.scrollY + 6}px`;
+  menu.style.left = `${Math.max(8, rect.right + window.scrollX - 170)}px`;
+  document.body.append(menu);
+  setTimeout(() => document.addEventListener("click", closeTagMenu, { once: true }));
+}
+
+/** Build a PDF of the current view and either download it or open the share sheet. */
+async function exportListPdf(mode: "download" | "share", button: HTMLButtonElement): Promise<void> {
   try {
     const scope = filter === "all" ? "" : filter;
     const sections = collectPrintSections();
@@ -943,16 +989,17 @@ async function shareListPdf(button: HTMLButtonElement): Promise<void> {
     const blob = new Blob([bytes as unknown as BlobPart], { type: "application/pdf" });
     const slug = scope ? "-" + scope.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "";
     const filename = `smart-to-do${slug}.pdf`;
-    const shareTitle = scope ? `Smart To-Do — ${scope}` : "Smart To-Do";
 
-    const file = new File([blob], filename, { type: "application/pdf" });
-    if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: shareTitle });
-        return;
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") return; // dismissed
-        // otherwise fall through to a download
+    if (mode === "share") {
+      const file = new File([blob], filename, { type: "application/pdf" });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: scope ? `Smart To-Do — ${scope}` : "Smart To-Do" });
+          return;
+        } catch (error) {
+          if (error instanceof Error && error.name === "AbortError") return; // dismissed
+          // otherwise fall through to a download
+        }
       }
     }
 

@@ -62,18 +62,18 @@ describe("Online product lookup", () => {
       now: () => new Date(1_000_000 + ++tick * 1000),
       newId: () => `task-${tick}`,
     });
-    repo.createBucket("Coles");
-    repo.createBucket("Chemist Warehouse");
+    repo.createBucket("Grocer");
+    repo.createBucket("Chemist");
     const task = repo.addTask("zxcv qwer asdf"); // lexicon can't place it
     assert.deepEqual(task.buckets, []);
 
     const buckets = [...new Set(["groceries"].flatMap((c) => repo.bucketsForConceptName(c)))];
-    assert.deepEqual(buckets, ["Coles"]);
+    assert.deepEqual(buckets, ["Grocer"]);
     assert.equal(repo.setSuggestedTags(task.id, buckets), true);
-    assert.deepEqual(repo.getTask(task.id)!.buckets, ["Coles"]);
+    assert.deepEqual(repo.getTask(task.id)!.buckets, ["Grocer"]);
 
     // Timid: never overrides a task the user has hand-tagged.
-    repo.toggleBucket(task.id, "Chemist Warehouse");
-    assert.equal(repo.setSuggestedTags(task.id, ["Coles"]), false);
+    repo.toggleBucket(task.id, "Chemist");
+    assert.equal(repo.setSuggestedTags(task.id, ["Grocer"]), false);
   });
 });

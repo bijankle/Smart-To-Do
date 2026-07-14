@@ -99,7 +99,7 @@ export class Repository {
    */
   applyStoreSetup(stores: string[], remap: Record<string, string>): boolean {
     const version = this.doc.setupVersion ?? 0;
-    if (version >= 7) return false;
+    if (version >= 8) return false;
 
     if (version < 2) this.applyPillSetup(stores, remap);
     // v4: the media feature (songs/films/books) was removed — drop those pills
@@ -119,9 +119,21 @@ export class Repository {
       this.foldBucket("Medical", "To-do");
       this.foldBucket("Computer tasks", "To-do");
     }
+    // v8: stores renamed to their category — Coles→Grocer, JB Hi-Fi→Electronics,
+    // Chemist Warehouse→Chemist, Officeworks→Office, Uniqlo→Clothing — and a new
+    // Footwear pill added. foldBucket carries tasks + training across; ensureNewPills
+    // creates Footwear (and any renamed target the user hadn't had).
+    if (version < 8) {
+      this.foldBucket("Coles", "Grocer");
+      this.foldBucket("JB Hi-Fi", "Electronics");
+      this.foldBucket("Chemist Warehouse", "Chemist");
+      this.foldBucket("Officeworks", "Office");
+      this.foldBucket("Uniqlo", "Clothing");
+      this.ensureNewPills(stores);
+    }
     this.rebuildClassifier();
     this.retagAuto();
-    this.doc.setupVersion = 7;
+    this.doc.setupVersion = 8;
     this.scheduleSave();
     return true;
   }

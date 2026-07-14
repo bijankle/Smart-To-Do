@@ -164,10 +164,10 @@ describe("Repository — bucket origins (legacy auto buckets)", () => {
 
 describe("Repository — bespoke store setup", () => {
   const STORES = [
-    "Coles", "Bunnings", "Chemist Warehouse", "JB Hi-Fi",
-    "Officeworks", "Ikea", "Kmart", "Uniqlo",
+    "Grocer", "Bunnings", "Chemist", "Electronics",
+    "Office", "Ikea", "Kmart", "Clothing",
   ];
-  const REMAP = { groceries: "Coles", hardware: "Bunnings", electronics: "JB Hi-Fi" };
+  const REMAP = { groceries: "Grocer", hardware: "Bunnings", electronics: "Electronics" };
 
   it("creates the store pills once and migrates generic buckets", async () => {
     const persistence = new MemoryPersistence();
@@ -179,8 +179,8 @@ describe("Repository — bespoke store setup", () => {
     const repo = await Repository.open(persistence, makeOptions(2_000_000));
     assert.equal(repo.applyStoreSetup(STORES, REMAP), true);
     assert.deepEqual([...repo.listBuckets()].sort(), [...STORES].sort());
-    assert.deepEqual(repo.getTask(onions.id)!.buckets, ["Coles"]);
-    assert.deepEqual(repo.getTask(onions.id)!.trainedBuckets, ["Coles"]);
+    assert.deepEqual(repo.getTask(onions.id)!.buckets, ["Grocer"]);
+    assert.deepEqual(repo.getTask(onions.id)!.trainedBuckets, ["Grocer"]);
     // Idempotent: recorded in the doc, never runs twice.
     assert.equal(repo.applyStoreSetup(STORES, REMAP), false);
   });
@@ -188,15 +188,15 @@ describe("Repository — bespoke store setup", () => {
   it("setup migration rebuilds the classifier, re-tags stale auto tags, and drops the media feature", async () => {
     const persistence = new MemoryPersistence();
     const before = await Repository.open(persistence, makeOptions());
-    before.applyStoreSetup([...STORES, "Medical", "Chemist Warehouse"], REMAP);
+    before.applyStoreSetup([...STORES, "Medical", "Chemist"], REMAP);
     await before.flush();
 
     // Simulate the pre-split world: 'Medical appointment' auto-tagged into
-    // Chemist Warehouse, with the doc still at setup v2.
+    // Chemist, with the doc still at setup v2.
     const doc = JSON.parse((await persistence.load())!);
     const ts = "2026-01-01T00:00:00.000Z";
     doc.tasks["stale"] = {
-      id: "stale", title: "Medical appointment", buckets: ["Chemist Warehouse"],
+      id: "stale", title: "Medical appointment", buckets: ["Chemist"],
       done: false, completedAt: null, order: 0, createdAt: ts, modifiedAt: ts,
       deletedAt: null, trainedBuckets: [],
     };
@@ -208,7 +208,7 @@ describe("Repository — bespoke store setup", () => {
     };
     // A grocery task that also happens to sit in Music keeps its real bucket.
     doc.tasks["mixed"] = {
-      id: "mixed", title: "milk", buckets: ["Coles", "Music"], done: false,
+      id: "mixed", title: "milk", buckets: ["Grocer", "Music"], done: false,
       completedAt: null, order: 2, createdAt: ts, modifiedAt: ts,
       deletedAt: null, trainedBuckets: [],
     };
@@ -218,7 +218,7 @@ describe("Repository — bespoke store setup", () => {
     await persistence.save(JSON.stringify(doc));
 
     const repo = await Repository.open(persistence, makeOptions(9_000_000));
-    assert.equal(repo.applyStoreSetup([...STORES, "Medical", "Chemist Warehouse"], REMAP), true);
+    assert.equal(repo.applyStoreSetup([...STORES, "Medical", "Chemist"], REMAP), true);
     // 'Medical appointment' re-tags into To-do (Medical folded away in v7).
     assert.deepEqual(repo.getTask("stale")!.buckets, ["To-do"]);
     assert.ok(!repo.listBuckets().includes("Medical"));
@@ -227,20 +227,20 @@ describe("Repository — bespoke store setup", () => {
     assert.ok(!repo.listBuckets().includes("Films"));
     assert.ok(!repo.listBuckets().includes("Music"));
     // The mixed task survives, minus the media membership.
-    assert.deepEqual(repo.getTask("mixed")!.buckets, ["Coles"]);
-    assert.equal(repo.applyStoreSetup([...STORES, "Medical", "Chemist Warehouse"], REMAP), false);
+    assert.deepEqual(repo.getTask("mixed")!.buckets, ["Grocer"]);
+    assert.equal(repo.applyStoreSetup([...STORES, "Medical", "Chemist"], REMAP), false);
   });
 
   it("does not recreate a store the user deleted", async () => {
     const persistence = new MemoryPersistence();
     const repo = await Repository.open(persistence, makeOptions());
     repo.applyStoreSetup(STORES, REMAP);
-    repo.deleteBucket("Uniqlo");
+    repo.deleteBucket("Clothing");
     await repo.flush();
 
     const reopened = await Repository.open(persistence, makeOptions(2_000_000));
     assert.equal(reopened.applyStoreSetup(STORES, REMAP), false);
-    assert.ok(!reopened.listBuckets().includes("Uniqlo"));
+    assert.ok(!reopened.listBuckets().includes("Clothing"));
   });
 
   it("merges Medical and Computer tasks into a single To-do pill", async () => {
@@ -270,16 +270,16 @@ describe("Repository — bespoke store setup", () => {
   it("clear all removes a bucket's items but keeps ones shared with another store", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.applyStoreSetup(STORES, REMAP);
-    const milk = repo.addTask("milk", "Coles"); // Coles only
-    const shared = repo.addTask("condoms"); // Coles AND Chemist Warehouse
-    assert.ok(shared.buckets.includes("Coles") && shared.buckets.includes("Chemist Warehouse"));
+    const milk = repo.addTask("milk", "Grocer"); // Grocer only
+    const shared = repo.addTask("condoms"); // Grocer AND Chemist
+    assert.ok(shared.buckets.includes("Grocer") && shared.buckets.includes("Chemist"));
 
-    const cleared = repo.clearFilter("Coles");
+    const cleared = repo.clearFilter("Grocer");
     assert.equal(cleared, 2);
     assert.equal(repo.getTask(milk.id), null); // single-bucket item deleted
-    assert.deepEqual(repo.getTask(shared.id)!.buckets, ["Chemist Warehouse"]); // survives elsewhere
-    // Learning is preserved: a fresh "milk" still auto-tags into Coles.
-    assert.deepEqual(repo.addTask("milk").buckets, ["Coles"]);
+    assert.deepEqual(repo.getTask(shared.id)!.buckets, ["Chemist"]); // survives elsewhere
+    // Learning is preserved: a fresh "milk" still auto-tags into Grocer.
+    assert.deepEqual(repo.addTask("milk").buckets, ["Grocer"]);
   });
 
   it("clear all in the All view deletes every open task", async () => {
@@ -307,16 +307,16 @@ describe("Repository — bespoke store setup", () => {
   it("auto-tags everyday captures into the right store", async () => {
     const repo = await Repository.open(new MemoryPersistence(), makeOptions());
     repo.applyStoreSetup(STORES, REMAP);
-    assert.deepEqual(repo.addTask("milk and bread").buckets, ["Coles"]);
+    assert.deepEqual(repo.addTask("milk and bread").buckets, ["Grocer"]);
     assert.deepEqual(repo.addTask("drill bits").buckets, ["Bunnings"]);
-    assert.deepEqual(repo.addTask("prescription refill").buckets, ["Chemist Warehouse"]);
-    assert.deepEqual(repo.addTask("hdmi cable").buckets, ["JB Hi-Fi"]);
+    assert.deepEqual(repo.addTask("prescription refill").buckets, ["Chemist"]);
+    assert.deepEqual(repo.addTask("hdmi cable").buckets, ["Electronics"]);
     // Kmart, a department store, also stocks stationery and furniture.
-    assert.deepEqual(repo.addTask("stapler and paper").buckets.sort(), ["Kmart", "Officeworks"]);
+    assert.deepEqual(repo.addTask("stapler and paper").buckets.sort(), ["Kmart", "Office"]);
     assert.deepEqual(repo.addTask("bookshelf and cushions").buckets.sort(), ["Ikea", "Kmart"]);
     assert.deepEqual(repo.addTask("storage tubs and hangers").buckets, ["Kmart"]);
-    // General apparel files into both Uniqlo and Kmart (a department store).
-    assert.deepEqual(repo.addTask("socks and jeans").buckets.sort(), ["Kmart", "Uniqlo"]);
+    // General apparel files into both Clothing and Kmart (a department store).
+    assert.deepEqual(repo.addTask("socks and jeans").buckets.sort(), ["Clothing", "Kmart"]);
   });
 });
 
