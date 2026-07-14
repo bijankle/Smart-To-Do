@@ -41,39 +41,6 @@ body {
   margin-bottom: 22px;
 }
 
-/* Banner shown only when the app is opened from a share link. */
-.share-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 16px;
-  padding: 12px 14px;
-  margin-bottom: 18px;
-  border: 1px solid var(--accent-tint-border);
-  border-radius: var(--radius-panel);
-  background: var(--accent-tint);
-}
-
-.share-banner-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 200px;
-  flex: 1;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.share-banner-text strong {
-  color: var(--text);
-}
-
-.share-banner-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .app-logo {
   width: 40px;
   height: 40px;

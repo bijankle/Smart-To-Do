@@ -7,23 +7,12 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <title>Smart To-Do</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='22' fill='%235865F2'/%3E%3Ctext x='32' y='44' font-family='sans-serif' font-size='36' font-weight='800' fill='%23fff' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="./src/ui/theme.css?v=21" />
-  <link rel="stylesheet" href="./src/ui/app.css?v=21" />
-  <script type="module" src="./dist/src/ui/app.js?v=21"></script>
+  <link rel="stylesheet" href="./src/ui/theme.css?v=22" />
+  <link rel="stylesheet" href="./src/ui/app.css?v=22" />
+  <script type="module" src="./dist/src/ui/app.js?v=22"></script>
 </head>
 <body>
   <main class="app">
-    <section id="share-banner" class="share-banner" hidden>
-      <div class="share-banner-text">
-        <strong>Shared list — a private copy.</strong>
-        <span>Edit it however you like; changes stay on this device and never touch the original.</span>
-      </div>
-      <div class="share-banner-actions">
-        <button type="button" id="share-save-btn" class="btn-primary btn-small">Save a copy to my lists</button>
-        <button type="button" id="share-exit-btn" class="btn-ghost">Exit</button>
-      </div>
-    </section>
-
     <header class="app-header">
       <button type="button" id="app-logo" class="app-logo" title="Home">S</button>
       <div class="app-titles">
@@ -33,7 +22,7 @@
       <div class="header-actions">
         <button type="button" id="undo-btn" class="icon-btn" title="Undo" disabled>↶</button>
         <button type="button" id="redo-btn" class="icon-btn" title="Redo" disabled>↷</button>
-        <button type="button" id="share-btn" class="icon-btn" title="Share a copy of this list">↗</button>
+        <button type="button" id="share-btn" class="icon-btn" title="Share the lists as a PDF">↗</button>
         <button type="button" id="sync-btn" class="btn-ghost" hidden>Sync</button>
         <button type="button" id="settings-btn" class="icon-btn" title="Sync settings">⚙</button>
       </div>

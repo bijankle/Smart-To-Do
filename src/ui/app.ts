@@ -17,18 +17,16 @@
  */
 
 import { Repository, type TaskFilter } from "../storage/repo.js";
-import { MemoryPersistence, WebStoragePersistence } from "../storage/persistence.js";
-import { createDoc, deserializeDoc, mergeDocs, serializeDoc, type TaskRecord } from "../storage/doc.js";
+import { WebStoragePersistence } from "../storage/persistence.js";
+import type { TaskRecord } from "../storage/doc.js";
 import { DriveSync } from "../sync/drive.js";
 import { lookupProductConcepts } from "../sync/productlookup.js";
-import { base64urlToBytes, bytesToBase64url, packShare, unpackShare } from "../sync/share.js";
+import { buildListPdf, type PdfSection } from "../sync/pdf.js";
 
 let repo: Repository;
 let filter: TaskFilter = "all";
 let showCompleted = false;
 let drive: DriveSync | null = null;
-/** True when the app was opened from a share link (isolated, in-memory copy). */
-let sharedMode = false;
 
 /** Just-ticked items stay visible this long (a shopping run) before tucking away. */
 const RECENT_COMPLETED_MS = 5 * 60_000;
@@ -71,7 +69,7 @@ const LOOKUP_CACHE_KEY = "smart-to-do/lookup-cache";
 const LOOKUP_MIN_INTERVAL_MS = 6500;
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v21 · share a copy";
+const APP_VERSION = "v22 · share as PDF";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -727,7 +725,6 @@ function setSyncStatus(text: string, isError = false): void {
 }
 
 function renderSyncUi(): void {
-  if (sharedMode) return; // a shared copy has no sync surface of its own
   const configured = Boolean(localStorage.getItem(CLIENT_ID_KEY));
   $("#sync-btn").hidden = !configured;
   $("#disconnect-btn").hidden = !configured;
@@ -814,7 +811,7 @@ function initSyncControls(): void {
   $("#redo-btn").addEventListener("click", redo);
 
   $("#share-btn").addEventListener("click", () =>
-    void shareCurrentList($<HTMLButtonElement>("#share-btn")),
+    void shareListPdf($<HTMLButtonElement>("#share-btn")),
   );
 
   // Force update: drop the service worker + code caches and reload. Tasks
@@ -845,133 +842,73 @@ function initSyncControls(): void {
   renderSyncUi();
 }
 
-// ---- share a copy ----------------------------------------------------------
+// ---- share as PDF ----------------------------------------------------------
 
 /**
- * Sharing needs no server: the whole list rides *inside* the link's fragment.
- * The current document is trimmed, gzipped (when the browser supports it), and
- * base64url-encoded. Opening that link elsewhere rehydrates the list into an
- * isolated, in-memory copy — the recipient edits freely and the original is
- * never touched (there is nothing pointing back at it).
+ * Gather the current lists into printable sections: one per bucket (in pill
+ * order) that has open tasks, then any untagged items. A task in several
+ * buckets is printed under each — exactly how it appears in the app.
  */
-const SHARE_PARAM = "s";
-
-/** gzip via the browser's native stream; null when unsupported (send raw). */
-async function gzip(bytes: Uint8Array): Promise<Uint8Array | null> {
-  if (typeof CompressionStream === "undefined") return null;
-  const blob = new Blob([bytes as unknown as BlobPart]);
-  const stream = blob.stream().pipeThrough(new CompressionStream("gzip"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+function collectPrintSections(): PdfSection[] {
+  const sections: PdfSection[] = [];
+  for (const bucket of repo.listBucketDetails()) {
+    const items = repo.listTasks(bucket.name).map((t) => t.title);
+    if (items.length > 0) sections.push({ name: bucket.name, items });
+  }
+  const untagged = repo
+    .listTasks("all")
+    .filter((t) => t.buckets.length === 0)
+    .map((t) => t.title);
+  if (untagged.length > 0) sections.push({ name: "Unfiled", items: untagged });
+  return sections;
 }
 
-async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
-  const blob = new Blob([bytes as unknown as BlobPart]);
-  const stream = blob.stream().pipeThrough(new DecompressionStream("gzip"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+/** Two-digit-padded local date, e.g. "14 Jul 2026", without pulling in a lib. */
+function todayLabel(): string {
+  const now = new Date();
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
 }
 
-/** Encode the current list into the fragment payload (`<flag><base64url>`). */
-async function encodeShare(): Promise<string> {
-  const raw = new TextEncoder().encode(packShare(deserializeDoc(repo.exportDoc())));
-  const gz = await gzip(raw);
-  // Leading flag: "1" = gzipped body, "0" = raw. Both stay URL-safe.
-  return (gz ? "1" : "0") + bytesToBase64url(gz ?? raw);
-}
-
-/** Decode a fragment payload back into a validated document JSON string. */
-async function decodeShare(param: string): Promise<string> {
-  const bytes = base64urlToBytes(param.slice(1));
-  const raw = param.charAt(0) === "1" ? await gunzip(bytes) : bytes;
-  return serializeDoc(unpackShare(new TextDecoder().decode(raw)));
-}
-
-/** Pull the `#s=…` payload out of the current URL, if any. */
-function readShareParam(): string | null {
-  const match = /[#&]s=([^&]+)/.exec(location.hash);
-  return match ? match[1]! : null;
-}
-
-/** Build a shareable link and hand it off (native share sheet or clipboard). */
-async function shareCurrentList(button: HTMLButtonElement): Promise<void> {
+/**
+ * Build a PDF of the lists and hand it off: the native share sheet with the
+ * file attached on mobile (so it can go to anyone/anywhere), or a download on
+ * desktop. No server, no mirror site — just a printable snapshot.
+ */
+async function shareListPdf(button: HTMLButtonElement): Promise<void> {
   try {
-    const payload = await encodeShare();
-    const url = `${location.origin}${location.pathname}#${SHARE_PARAM}=${payload}`;
-    if (typeof navigator.share === "function") {
+    const sections = collectPrintSections();
+    const total = sections.reduce((n, s) => n + s.items.length, 0);
+    const bytes = buildListPdf({
+      title: "Smart To-Do",
+      subtitle: `${total} item${total === 1 ? "" : "s"} · ${todayLabel()}`,
+      sections,
+    });
+    const blob = new Blob([bytes as unknown as BlobPart], { type: "application/pdf" });
+    const filename = "smart-to-do.pdf";
+
+    const file = new File([blob], filename, { type: "application/pdf" });
+    if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ title: "Smart To-Do", url });
+        await navigator.share({ files: [file], title: "Smart To-Do" });
         return;
       } catch (error) {
-        // User dismissed the sheet — don't fall through to a surprise copy.
-        if (error instanceof Error && error.name === "AbortError") return;
+        if (error instanceof Error && error.name === "AbortError") return; // dismissed
+        // otherwise fall through to a download
       }
     }
-    await navigator.clipboard.writeText(url);
+
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
     flashButton(button, "✓");
   } catch {
     flashButton(button, "✕");
-  }
-}
-
-/** Boot the app from a share link into an isolated, in-memory copy. */
-async function startSharedView(param: string): Promise<boolean> {
-  let json: string;
-  try {
-    json = await decodeShare(param);
-  } catch {
-    return false; // corrupt or truncated link
-  }
-  sharedMode = true;
-  repo = await Repository.open(new MemoryPersistence());
-  repo.restoreSnapshot(json);
-  repo.applyStoreSetup(MY_PILLS, GENERIC_REMAP);
-  repo.stripTitleFormatting();
-  return true;
-}
-
-/** Wire the shared-view chrome: banner + hide anything that isn't its to touch. */
-function initSharedControls(): void {
-  document.body.classList.add("shared-mode");
-  $("#share-banner").hidden = false;
-  // These act on the owner's own account/list, not this copy — hide them.
-  $("#sync-btn").hidden = true;
-  $("#settings-btn").hidden = true;
-  $("#share-btn").hidden = true;
-  $("#sync-indicator").textContent = "shared copy";
-  $("#app-version").textContent = APP_VERSION;
-
-  $("#undo-btn").addEventListener("click", undo);
-  $("#redo-btn").addEventListener("click", redo);
-  $("#share-exit-btn").addEventListener("click", leaveSharedView);
-  $("#share-save-btn").addEventListener("click", () => void saveSharedCopy());
-}
-
-/**
- * Drop the share fragment and force a real reload back into normal mode.
- * Removing only the hash is a same-document navigation (no reload), so we
- * rewrite the URL first and then reload explicitly.
- */
-function leaveSharedView(): void {
-  history.replaceState(null, "", location.pathname + location.search);
-  location.reload();
-}
-
-/**
- * Merge the shared copy into this device's own saved list (non-destructive,
- * last-write-wins per record), then leave shared mode. This is how you pull a
- * list from your phone onto a fresh laptop.
- */
-async function saveSharedCopy(): Promise<void> {
-  const button = $<HTMLButtonElement>("#share-save-btn");
-  try {
-    await repo.flush();
-    const master = new WebStoragePersistence(window.localStorage);
-    const rawExisting = await master.load();
-    const existing = rawExisting ? deserializeDoc(rawExisting) : createDoc();
-    const merged = mergeDocs(existing, deserializeDoc(repo.exportDoc()));
-    await master.save(serializeDoc(merged));
-    leaveSharedView(); // reopen as your own list
-  } catch {
-    flashButton(button, "Couldn't save");
   }
 }
 
@@ -1047,19 +984,6 @@ function registerServiceWorker(): void {
 }
 
 async function main(): Promise<void> {
-  const shareParam = readShareParam();
-  if (shareParam && (await startSharedView(shareParam))) {
-    wireCommonListeners();
-    initSharedControls();
-    render();
-    $<HTMLTextAreaElement>("#capture-input").focus();
-    registerServiceWorker();
-    return;
-  }
-  // A corrupt/old share link falls through here; drop the hash so a reload
-  // doesn't keep re-triggering it, and open the user's own list instead.
-  if (shareParam) history.replaceState(null, "", location.pathname + location.search);
-
   repo = await Repository.open(new WebStoragePersistence(window.localStorage));
   repo.applyStoreSetup(MY_PILLS, GENERIC_REMAP);
   repo.stripTitleFormatting();
