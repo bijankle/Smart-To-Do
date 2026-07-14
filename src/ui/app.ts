@@ -69,7 +69,7 @@ const LOOKUP_CACHE_KEY = "smart-to-do/lookup-cache";
 const LOOKUP_MIN_INTERVAL_MS = 6500;
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v24 · nicer PDF";
+const APP_VERSION = "v25 · share in list bar";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -426,6 +426,35 @@ function iconButton(className: string, symbol: string, title: string, onClick: (
   return button;
 }
 
+/** The classic three-node share glyph, thick-stroked in the app's accent. */
+const SHARE_SVG =
+  '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" ' +
+  'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<circle cx="18" cy="5" r="2.7"/><circle cx="6" cy="12" r="2.7"/><circle cx="18" cy="19" r="2.7"/>' +
+  '<path d="M8.6 10.8l6.8-4M8.6 13.2l6.8 4"/></svg>';
+
+/** Like iconButton but with developer-authored SVG markup (never user text). */
+function svgButton(className: string, svg: string, title: string, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `row-btn ${className}`;
+  button.innerHTML = svg;
+  button.title = title;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+/** flashButton for SVG buttons: restores the icon markup, not empty text. */
+function flashIconButton(button: HTMLButtonElement, message: string): void {
+  const original = button.innerHTML;
+  button.textContent = message;
+  button.disabled = true;
+  window.setTimeout(() => {
+    button.innerHTML = original;
+    button.disabled = false;
+  }, 1400);
+}
+
 function renderRow(task: TaskRecord): HTMLElement {
   const row = document.createElement("div");
   row.className = task.done ? "row row-done" : "row";
@@ -441,9 +470,10 @@ function renderRow(task: TaskRecord): HTMLElement {
     render();
   });
 
-  // Title + tag chips share one wrapping box: the tags flow onto a new line
-  // when they'd otherwise squeeze the title, so a many-tag item never shrinks
-  // the title to a single character per line.
+  // Title + tag chips share one wrapping box. The tags live in their own
+  // group so they sit inline beside the title when there's room and drop to a
+  // new line together when there isn't — and the title, being flexible, then
+  // takes the whole first line instead of ever being squeezed/truncated.
   const body = document.createElement("div");
   body.className = "row-body";
   const title = document.createElement("div");
@@ -452,17 +482,22 @@ function renderRow(task: TaskRecord): HTMLElement {
   title.title = "Click to edit";
   title.addEventListener("click", () => beginTitleEdit(title, task));
   body.append(title);
-  for (const bucket of task.buckets) {
-    const tag = document.createElement("button");
-    tag.type = "button";
-    tag.className = "row-tag";
-    tag.textContent = bucket;
-    tag.title = "Edit this task's tags (teaches the classifier)";
-    tag.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openTagMenu(tag, task);
-    });
-    body.append(tag);
+  if (task.buckets.length > 0) {
+    const tags = document.createElement("div");
+    tags.className = "row-tags";
+    for (const bucket of task.buckets) {
+      const tag = document.createElement("button");
+      tag.type = "button";
+      tag.className = "row-tag";
+      tag.textContent = bucket;
+      tag.title = "Edit this task's tags (teaches the classifier)";
+      tag.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openTagMenu(tag, task);
+      });
+      tags.append(tag);
+    }
+    body.append(tags);
   }
 
   // Action buttons stay grouped on the right, out of the title's flex space.
@@ -639,9 +674,15 @@ function renderList(): void {
   } else {
     // Action bar: icon buttons identical to the row's, aligned right so
     // Copy-all sits over the ⧉ column and Clear-all over the × column.
+    // Share sits to their left (exports the current view as a PDF).
     if (open.length > 0) {
       const bar = document.createElement("div");
       bar.className = "list-actions";
+
+      // Share (PDF) — exports the current view: this tag, or every bucket in All.
+      const share = svgButton("row-share list-icon", SHARE_SVG, sharePdfTitle(), () =>
+        void shareListPdf(share),
+      );
 
       // Copy-all (⧉) — copies the whole list as an item + categories table.
       const copy = iconButton("row-copy list-icon", "⧉", "Copy the whole list", () => {
@@ -660,7 +701,7 @@ function renderList(): void {
         render();
       });
 
-      bar.append(copy, clear);
+      bar.append(share, copy, clear);
       list.append(bar);
     }
     for (const task of open) {
@@ -817,10 +858,6 @@ function initSyncControls(): void {
   $("#undo-btn").addEventListener("click", undo);
   $("#redo-btn").addEventListener("click", redo);
 
-  $("#share-btn").addEventListener("click", () =>
-    void shareListPdf($<HTMLButtonElement>("#share-btn")),
-  );
-
   // Force update: drop the service worker + code caches and reload. Tasks
   // live in localStorage and are untouched; only the cached shell is cleared.
   $("#force-update-btn").addEventListener("click", () => {
@@ -852,11 +889,16 @@ function initSyncControls(): void {
 // ---- share as PDF ----------------------------------------------------------
 
 /**
- * Gather the current lists into printable sections: one per bucket (in pill
- * order) that has open tasks, then any untagged items. A task in several
- * buckets is printed under each — exactly how it appears in the app.
+ * Gather the current view into printable sections. Viewing a single tag exports
+ * just that tag; viewing All exports one section per bucket (in pill order) that
+ * has open tasks, then any untagged items. A task in several buckets is printed
+ * under each — exactly how it appears in the app.
  */
 function collectPrintSections(): PdfSection[] {
+  if (filter !== "all") {
+    const items = repo.listTasks(filter).map((t) => t.title);
+    return items.length > 0 ? [{ name: filter, items }] : [];
+  }
   const sections: PdfSection[] = [];
   for (const bucket of repo.listBucketDetails()) {
     const items = repo.listTasks(bucket.name).map((t) => t.title);
@@ -868,6 +910,11 @@ function collectPrintSections(): PdfSection[] {
     .map((t) => t.title);
   if (untagged.length > 0) sections.push({ name: "Unfiled", items: untagged });
   return sections;
+}
+
+/** Tooltip/label for the share button, reflecting what it will export. */
+function sharePdfTitle(): string {
+  return filter === "all" ? "Share all lists as a PDF" : `Share the “${filter}” list as a PDF`;
 }
 
 /** Two-digit-padded local date, e.g. "14 Jul 2026", without pulling in a lib. */
@@ -884,20 +931,24 @@ function todayLabel(): string {
  */
 async function shareListPdf(button: HTMLButtonElement): Promise<void> {
   try {
+    const scope = filter === "all" ? "" : filter;
     const sections = collectPrintSections();
     const total = sections.reduce((n, s) => n + s.items.length, 0);
     const bytes = buildListPdf({
       title: "Smart To-Do",
-      subtitle: `${total} item${total === 1 ? "" : "s"} · ${todayLabel()}`,
+      subtitle:
+        (scope ? `${scope} · ` : "") + `${total} item${total === 1 ? "" : "s"} · ${todayLabel()}`,
       sections,
     });
     const blob = new Blob([bytes as unknown as BlobPart], { type: "application/pdf" });
-    const filename = "smart-to-do.pdf";
+    const slug = scope ? "-" + scope.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "";
+    const filename = `smart-to-do${slug}.pdf`;
+    const shareTitle = scope ? `Smart To-Do — ${scope}` : "Smart To-Do";
 
     const file = new File([blob], filename, { type: "application/pdf" });
     if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: "Smart To-Do" });
+        await navigator.share({ files: [file], title: shareTitle });
         return;
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return; // dismissed
@@ -913,9 +964,9 @@ async function shareListPdf(button: HTMLButtonElement): Promise<void> {
     anchor.click();
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    flashButton(button, "✓");
+    flashIconButton(button, "✓");
   } catch {
-    flashButton(button, "✕");
+    flashIconButton(button, "✕");
   }
 }
 

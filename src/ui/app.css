@@ -434,14 +434,16 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 8px;
+  gap: 6px 10px;
 }
 
 .row-title {
-  /* Keep a healthy floor so a crowded row wraps the title at word breaks,
-     never one character per line. Grows to fill; tags wrap past it. */
+  /* Flexible: sits beside the tags when they fit, and takes the whole first
+     line (so it never truncates) when the tag group drops below. The min-width
+     is a readable floor; break-word means the worst case is a word wrap, never
+     one character per line. */
   flex: 1 1 auto;
-  min-width: 55%;
+  min-width: 8em;
   font-size: 15px;
   line-height: 1.4;
   color: var(--text-secondary);
@@ -449,11 +451,39 @@ body {
   cursor: text;
 }
 
+/* Tag chips travel as a group: inline beside the title when there's room,
+   wrapping to the next line together when there isn't. */
+.row-tags {
+  flex: 0 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .row-actions {
   flex: none;
   display: flex;
   align-items: center;
   gap: 12px; /* matches .list-actions so Copy-all/Clear-all align over ⧉ / × */
+}
+
+/* Share button: the accent-coloured share glyph, matching the row icon box.
+   Double class beats the later `.row-btn` colour rule. */
+.row-btn.row-share {
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.row-btn.row-share:hover {
+  background: var(--accent-tint);
+  border-color: var(--accent-tint-border);
+}
+
+.row-share svg {
+  display: block;
 }
 
 .row-edit {
