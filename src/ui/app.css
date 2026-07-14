@@ -431,14 +431,29 @@ body {
 .row-body {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
 }
 
 .row-title {
+  /* Keep a healthy floor so a crowded row wraps the title at word breaks,
+     never one character per line. Grows to fill; tags wrap past it. */
+  flex: 1 1 auto;
+  min-width: 55%;
   font-size: 15px;
   line-height: 1.4;
   color: var(--text-secondary);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   cursor: text;
+}
+
+.row-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px; /* matches .list-actions so Copy-all/Clear-all align over ⧉ / × */
 }
 
 .row-edit {

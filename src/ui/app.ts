@@ -69,7 +69,7 @@ const LOOKUP_CACHE_KEY = "smart-to-do/lookup-cache";
 const LOOKUP_MIN_INTERVAL_MS = 6500;
 
 /** Visible build tag — shown in ⚙ App version so we can confirm the live build. */
-const APP_VERSION = "v22 · share as PDF";
+const APP_VERSION = "v23 · row layout fix";
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector(selector) as T;
 
@@ -441,6 +441,9 @@ function renderRow(task: TaskRecord): HTMLElement {
     render();
   });
 
+  // Title + tag chips share one wrapping box: the tags flow onto a new line
+  // when they'd otherwise squeeze the title, so a many-tag item never shrinks
+  // the title to a single character per line.
   const body = document.createElement("div");
   body.className = "row-body";
   const title = document.createElement("div");
@@ -449,8 +452,6 @@ function renderRow(task: TaskRecord): HTMLElement {
   title.title = "Click to edit";
   title.addEventListener("click", () => beginTitleEdit(title, task));
   body.append(title);
-
-  row.append(check, body);
   for (const bucket of task.buckets) {
     const tag = document.createElement("button");
     tag.type = "button";
@@ -461,14 +462,18 @@ function renderRow(task: TaskRecord): HTMLElement {
       e.stopPropagation();
       openTagMenu(tag, task);
     });
-    row.append(tag);
+    body.append(tag);
   }
+
+  // Action buttons stay grouped on the right, out of the title's flex space.
+  const actions = document.createElement("div");
+  actions.className = "row-actions";
   if (!task.done) {
     // Manual filing = the training signal. Same picker as the tag chip.
     const assign = iconButton("row-assign", "+", "Add to a tag — teaches the app", () => {
       openTagMenu(assign, task);
     });
-    row.append(assign);
+    actions.append(assign);
   }
   const copy = iconButton("row-copy", "⧉", "Copy this item", () => {
     void navigator.clipboard.writeText(task.title).then(
@@ -476,14 +481,16 @@ function renderRow(task: TaskRecord): HTMLElement {
       () => flashButton(copy, "✕"),
     );
   });
-  row.append(copy);
-  row.append(
+  actions.append(copy);
+  actions.append(
     iconButton("row-delete", "×", "Delete", () => {
       snapshot();
       repo.deleteTask(task.id);
       render();
     }),
   );
+
+  row.append(check, body, actions);
   return row;
 }
 
